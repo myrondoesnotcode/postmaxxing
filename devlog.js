@@ -35,9 +35,13 @@ const DAYS_FILTER    = parseInt(getArg('--days') || '1');
 const STYLE_FILE     = getArg('--style');
 const PUSH_TO_TF     = hasFlag('--push');
 const LIST_MODE      = hasFlag('--list');
-const FORMAT         = getArg('--format') || 'mix';   // single | thread | mix
-const TONE           = getArg('--tone')   || 'mix';   // technical | story | mix
+const MODE           = getArg('--mode')    || 'story';  // story | technical
+const CONTEXT        = getArg('--context') || null;     // optional one-line hint
 const COUNT          = parseInt(getArg('--count') || '5');
+
+if (!['story', 'technical'].includes(MODE)) {
+  die(`Invalid --mode: ${MODE}. Use 'story' or 'technical'.`);
+}
 
 // ─── Pre-gate ─────────────────────────────────────────────────────────────
 
@@ -388,79 +392,6 @@ function loadStyle(stylePath) {
   } catch (e) { warn(`Couldn't parse style file: ${e.message}`); return null; }
 }
 
-// ─── Tweet generation ──────────────────────────────────────────────────────
-
-function buildSystemPrompt(projectName, styleExamples, tone, format) {
-  const styleSection = styleExamples
-    ? `\nExamples of this person's real tweets for style reference:\n---\n${styleExamples.slice(0, 2000)}\n---\n`
-    : '';
-
-  const toneGuide = {
-    technical: `Tone: technical and specific. Mention stack, architecture, numbers, tradeoffs. Written for developers who want the actual details. Don't dumb it down.`,
-    story:     `Tone: story-first. Focus on the human experience — the moment of realization, the frustration, the unexpected turn. Numbers only if they serve the story. Written for anyone building something.`,
-    mix:       `Tone: vary across outputs. Some should be technical and specific (for developers). Some should be story-first (for anyone building something).`,
-  }[tone] || toneGuide.mix;
-
-  const formatGuide = {
-    single: `All outputs must be single tweets under 280 characters.`,
-    thread: `All outputs must be threads of 3-5 connected tweets. Each tweet in the thread under 280 chars. Threads should have a clear arc: hook → development → payoff.`,
-    mix:    `Mix formats: some single tweets (under 280 chars), some threads (3-5 tweets with a hook → development → payoff arc).`,
-  }[format];
-
-  return `You are a ghost-writer for a developer sharing authentic building-in-public content on X/Twitter. They are building ${projectName}.
-
-Voice: specific, honest, not corporate. Shares the messy middle. Uses actual numbers and real decisions. Self-deprecating about mistakes. Thinks out loud.
-${styleSection}
-${toneGuide}
-
-${formatGuide}
-
-Rules:
-- Be specific. Use actual numbers, decisions, and details from the session.
-- No hype. No em-dashes. No "excited to share". No "game-changer".
-- Feel like a journal entry made public.
-- 1 hashtag max per tweet, only if completely natural.
-
-Return ONLY valid JSON, no other text, in this exact format:
-{
-  "items": [
-    { "type": "single", "label": "short label", "text": "tweet text" },
-    { "type": "thread", "label": "short label", "tweets": ["tweet 1", "tweet 2", "tweet 3"] }
-  ]
-}`;
-}
-
-async function generateTweets(session, projectName, styleExamples) {
-  if (!ANTHROPIC_KEY) die('Missing ANTHROPIC_API_KEY in .env');
-
-  const systemPrompt = buildSystemPrompt(projectName, styleExamples, TONE, FORMAT);
-  const userPrompt   = `Project: ${projectName}. Generate ${COUNT} items total.\n\nSession:\n${session}`;
-
-  const res  = await fetch('https://api.anthropic.com/v1/messages', {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/json',
-      'x-api-key': ANTHROPIC_KEY,
-      'anthropic-version': '2023-06-01',
-    },
-    body: JSON.stringify({
-      model: SONNET_MODEL,
-      max_tokens: 2000,
-      system: systemPrompt,
-      messages: [{ role: 'user', content: userPrompt }],
-    }),
-  });
-
-  const data  = await res.json();
-  if (data.error) die(`Anthropic API error: ${data.error.message}`);
-
-  const raw   = data.content?.find(b => b.type === 'text')?.text || '';
-  const clean = raw.replace(/```json|```/g, '').trim();
-
-  try { return JSON.parse(clean); }
-  catch { die(`Couldn't parse API response:\n${raw}`); }
-}
-
 // ─── Typefully push ────────────────────────────────────────────────────────
 
 async function pushToTypefully(content) {
@@ -479,30 +410,35 @@ async function pushToTypefully(content) {
 
 function printResults(result, projectName) {
   console.log(`\n${'─'.repeat(60)}`);
-  console.log(`  devlog  ·  ${projectName}  ·  tone:${TONE}  format:${FORMAT}`);
+  console.log(`  devlog  ·  ${projectName}  ·  mode:${MODE}`);
   console.log(`${'─'.repeat(60)}\n`);
 
-  result.items.forEach((item, i) => {
-    if (item.type === 'single') {
-      const len = item.text.length;
-      console.log(`  ${i + 1}. [SINGLE] ${item.label.toUpperCase()}`);
-      console.log(`  ${len > 260 ? '⚠' : '✓'} ${len}/280\n`);
-      console.log(`  ${item.text.replace(/\n/g, '\n  ')}\n`);
-    } else if (item.type === 'thread') {
-      console.log(`  ${i + 1}. [THREAD] ${item.label.toUpperCase()}`);
-      console.log(`  ${item.tweets.length} tweets\n`);
-      item.tweets.forEach((t, j) => {
+  if (!result.candidates || result.candidates.length === 0) {
+    console.log('  (no candidates returned)\n');
+    return;
+  }
+
+  result.candidates.forEach((c, i) => {
+    const tag = `[${c.shape.toUpperCase()} · ${c.type.toUpperCase()}]`;
+    console.log(`  ${i + 1}. ${tag}  ${c.label || ''}`);
+    if (c.shape === 'single') {
+      const len = (c.text || '').length;
+      console.log(`     ${len > 260 ? '⚠' : '✓'} ${len}/280\n`);
+      console.log(`     ${(c.text || '').replace(/\n/g, '\n     ')}\n`);
+    } else {
+      const tweets = c.tweets || [];
+      console.log(`     ${tweets.length} tweets\n`);
+      tweets.forEach((t, j) => {
         const len = t.length;
-        console.log(`  ${j + 1}/${item.tweets.length} ${len > 260 ? '⚠' : '✓'} ${len}/280`);
-        console.log(`  ${t.replace(/\n/g, '\n  ')}\n`);
+        console.log(`     ${j + 1}/${tweets.length} ${len > 260 ? '⚠' : '✓'} ${len}/280`);
+        console.log(`     ${t.replace(/\n/g, '\n     ')}\n`);
       });
     }
     console.log(`  ${'·'.repeat(40)}\n`);
   });
 
   console.log(`${'─'.repeat(60)}`);
-  console.log(`  Flags: --format single|thread|mix  --tone technical|story|mix  --count N`);
-  if (TYPEFULLY_KEY) console.log(`  --push to send drafts to Typefully`);
+  console.log(`  --mode story|technical  --count N  --push`);
   console.log(`${'─'.repeat(60)}\n`);
 }
 
@@ -584,48 +520,106 @@ function prompt(q) {
 function die(msg)  { console.error(`\n  ✗ ${msg}\n`); process.exit(1); }
 function warn(msg) { console.warn(`  ⚠ ${msg}`); }
 
+// ─── Push & approval ──────────────────────────────────────────────────────
+
+async function handlePushAndApproval(result, slug) {
+  if (!TYPEFULLY_KEY) {
+    console.log('  Skipping push: no TYPEFULLY_API_KEY in .env\n');
+    return;
+  }
+
+  const answer = await prompt('  Which to push? (e.g. "1,3" or "none"): ');
+  const picks  = answer.trim().toLowerCase();
+  if (!picks || picks === 'none') {
+    console.log('  No approvals recorded.\n');
+    return;
+  }
+
+  const indices = picks.split(',')
+    .map(s => parseInt(s.trim(), 10) - 1)
+    .filter(i => !isNaN(i) && i >= 0 && i < result.candidates.length);
+
+  const approvals = [];
+  for (const i of indices) {
+    const c       = result.candidates[i];
+    const content = c.shape === 'thread' ? (c.tweets || []).join('\n\n') : c.text;
+    try {
+      await pushToTypefully(content);
+      console.log(`  ✓ pushed: ${c.label}`);
+      approvals.push({ summary: c.summary_for_state || c.label, type: c.type, arc: c.arc });
+    } catch (e) {
+      console.error(`  ✗ failed: ${e.message}`);
+    }
+  }
+
+  if (approvals.length) {
+    recordApprovals(slug, approvals);
+    console.log(`\n  Recorded ${approvals.length} approval(s) to project state.\n`);
+  }
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('\n  devlog v0  —  session → tweets\n');
+  console.log('\n  devlog v1  —  session → reasoning → posts\n');
+
+  if (!ANTHROPIC_KEY) die('Missing ANTHROPIC_API_KEY in .env');
 
   process.stdout.write('  Finding sessions...');
   const sessions = findSessions();
   process.stdout.write(` found ${sessions.length}\n`);
-
-  if (sessions.length === 0) die(`No sessions found. Try --days 7.`);
+  if (sessions.length === 0) die('No sessions found. Try --days 7.');
 
   const session = LIST_MODE ? await pickSession(sessions) : sessions[0];
-  console.log(`\n  Project : ${session.project}`);
+  const slug    = projectSlug(path.basename(path.dirname(session.file)));
+
+  console.log(`\n  Project : ${session.project}  (slug: ${slug})`);
   console.log(`  Session : ${formatAge(session.mtime)}  (${(session.size/1024).toFixed(0)}kb)`);
-  console.log(`  Format  : ${FORMAT}  |  Tone: ${TONE}  |  Count: ${COUNT}`);
+  console.log(`  Mode    : ${MODE}  |  Count: ${COUNT}`);
+
+  // Pre-API gate
+  const rawText = fs.readFileSync(session.file, 'utf8');
+  const gate    = passesPreGate(rawText);
+  if (!gate.ok) die(gate.reason + ' Try a longer session or --list.');
 
   process.stdout.write('  Parsing...');
   const messages = parseSession(session.file);
   const chunk    = chunkSession(messages);
   process.stdout.write(` ${messages.length} messages, ${chunk.length} chars\n`);
 
-  if (messages.length < 2) die('Session too short. Try a different one.');
+  const state = loadState(slug);
+  if (state.active_arcs.length) console.log(`  Arcs    : ${state.active_arcs.join(', ')}`);
 
-  const style = STYLE_FILE ? loadStyle(STYLE_FILE) : null;
-  if (style) console.log(`  Style   : loaded from ${path.basename(STYLE_FILE)}`);
+  const voiceExamples = STYLE_FILE ? loadStyle(STYLE_FILE) : null;
+  if (voiceExamples) console.log(`  Style   : loaded from ${path.basename(STYLE_FILE)}`);
 
-  process.stdout.write('  Generating...');
-  const result = await generateTweets(chunk, session.project, style);
+  // Append manual context hint to session if provided
+  const sessionForPrompt = CONTEXT
+    ? `Manual context from author: ${CONTEXT}\n\n---\n\n${chunk}`
+    : chunk;
+
+  process.stdout.write('  Extracting (Haiku)...');
+  const extraction = await extractStage1(sessionForPrompt, state, { apiKey: ANTHROPIC_KEY });
+  process.stdout.write(' done\n');
+
+  // Stage 1 gate: nothing to share
+  if (extraction.best_output_type === 'nothing' && !extraction.active_arc) {
+    console.log('\n  No story today.\n  Session had no articulated decisions or reasoning worth sharing.\n  Try a session where you talked through a choice or trade-off.\n');
+    process.exit(0);
+  }
+
+  process.stdout.write('  Generating (Sonnet)...');
+  const result = await generateStage2(extraction, state, {
+    mode: MODE, count: COUNT, voiceExamples, apiKey: ANTHROPIC_KEY,
+  });
   process.stdout.write(' done\n');
 
   printResults(result, session.project);
 
   if (PUSH_TO_TF) {
-    console.log('  Pushing to Typefully...\n');
-    for (const item of result.items) {
-      try {
-        const content = item.type === 'thread' ? item.tweets.join('\n\n') : item.text;
-        await pushToTypefully(content);
-        console.log(`  ✓ ${item.type}: ${item.label}`);
-      } catch (e) { console.error(`  ✗ Failed: ${e.message}`); }
-    }
-    console.log('\n  Done. Open Typefully to review.\n');
+    await handlePushAndApproval(result, slug);
+  } else if (result.candidates && result.candidates.length) {
+    console.log(`  --push to send drafts to Typefully.\n`);
   }
 }
 
