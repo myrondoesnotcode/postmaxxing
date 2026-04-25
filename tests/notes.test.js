@@ -29,9 +29,17 @@ const sampleResult = {
   ],
 };
 
-test('buildNoteContent includes project name and date', () => {
-  const content = buildNoteContent(sampleResult, 'clipmatic', 'story', '2026-04-25');
-  assert.match(content, /clipmatic/i);
+test('buildNoteContent includes project name and date in header', () => {
+  // Use a result with no tweet content that echoes the project name,
+  // so we're testing the header itself and not coincidental tweet content.
+  const resultWithoutProjectName = {
+    candidates: [{
+      shape: 'single', type: 'story', label: 'test label',
+      text: 'some tweet text with no project name in it', tweets: null, arc: null, summary_for_state: 's',
+    }],
+  };
+  const content = buildNoteContent(resultWithoutProjectName, 'myuniqueslug', 'story', '2026-04-25');
+  assert.match(content, /myuniqueslug/i);
   assert.match(content, /2026-04-25/);
 });
 
@@ -88,4 +96,22 @@ test('exportToNotes skips when platform is not darwin', () => {
   const stubExec = () => { called = true; };
   exportToNotes('T', 'B', { execFn: stubExec, platform: 'linux' });
   assert.strictEqual(called, false, 'Should not call execFn on non-darwin');
+});
+
+test('exportToNotes escapes double quotes in title and body', () => {
+  let capturedCmd = null;
+  const stubExec = (cmd) => { capturedCmd = cmd; };
+  exportToNotes('Title with "quotes"', 'Body with "quotes" inside', { execFn: stubExec });
+  assert.ok(capturedCmd, 'execFn should have been called');
+  assert.doesNotMatch(capturedCmd, /"quotes"/, 'Raw double quotes should not appear unescaped');
+  assert.match(capturedCmd, /\\"quotes\\"/);
+});
+
+test('exportToNotes handles body with newlines', () => {
+  let capturedCmd = null;
+  const stubExec = (cmd) => { capturedCmd = cmd; };
+  exportToNotes('T', 'line one\nline two', { execFn: stubExec });
+  assert.ok(capturedCmd);
+  assert.doesNotMatch(capturedCmd, /line one\nline two/, 'Literal newline should not appear in command');
+  assert.match(capturedCmd, /line one\\nline two/);
 });

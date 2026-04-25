@@ -566,7 +566,7 @@ function buildNoteContent(result, projectName, mode, dateStr) {
   const divider = '─'.repeat(40);
   const lines   = [];
 
-  lines.push(`MODE: ${mode}  |  ${date}`);
+  lines.push(`${projectName}  ·  MODE: ${mode}  |  ${date}`);
   lines.push('');
 
   const candidates = result.candidates || [];
@@ -613,8 +613,8 @@ function exportToNotes(title, body, opts = {}) {
   }
 
   // Escape single quotes for AppleScript (replace with right single quotation mark)
-  const safeTitle = title.replace(/'/g, '\u2019');
-  const safeBody  = body.replace(/'/g, '\u2019').replace(/\n/g, '\\n');
+  const safeTitle = (title || '').replace(/'/g, '\u2019').replace(/"/g, '\\"');
+  const safeBody  = (body  || '').replace(/'/g, '\u2019').replace(/"/g, '\\"').replace(/\n/g, '\\n');
 
   const script = `tell application "Notes" to make new note at folder "Notes" with properties {name:"${safeTitle}", body:"${safeBody}"}`;
 
