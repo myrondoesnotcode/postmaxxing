@@ -66,10 +66,10 @@ test('smoke: grind session passes pre-gate', () => {
 
 test('smoke: rich session → Haiku extraction → Sonnet generation (story mode)', async () => {
   // Two-call stub: first call → Haiku extraction, second call → Sonnet generation
-  let callCount = 0;
+  const callModels = [];
   const stubFetch = async (url, opts) => {
-    callCount++;
     const body = JSON.parse(opts.body);
+    callModels.push(body.model);
     if (body.model.includes('haiku')) {
       return {
         ok: true,
@@ -131,8 +131,10 @@ test('smoke: rich session → Haiku extraction → Sonnet generation (story mode
   assert.ok(result.candidates[0].text.includes('$0.16'), 'Single should contain the key number');
   assert.strictEqual(result.candidates[1].tweets.length, 3, 'Thread should have 3 tweets');
 
-  // Verify two API calls happened (Haiku + Sonnet)
-  assert.strictEqual(callCount, 2, 'Should make exactly 2 API calls');
+  // Verify two API calls happened (Haiku + Sonnet) in the correct order
+  assert.strictEqual(callModels.length, 2, 'Should make exactly 2 API calls');
+  assert.strictEqual(callModels[0], 'claude-haiku-4-5', '1st call must be Haiku (Stage 1)');
+  assert.strictEqual(callModels[1], 'claude-sonnet-4-6', '2nd call must be Sonnet (Stage 2)');
 });
 
 // ─── Full pipeline: grind session → nothing extraction ────────────────────
@@ -165,12 +167,18 @@ test('smoke: session with active arc → extraction reflects continuation', asyn
     active_arc: 'pricing redesign',
   };
 
-  const stubFetch = async () => ({
-    ok: true,
-    json: async () => ({ content: [{ type: 'text', text: JSON.stringify(continuationExtraction) }] }),
-  });
+  let capturedPrompt = null;
+  const stubFetch = async (url, opts) => {
+    capturedPrompt = JSON.parse(opts.body).messages[0].content;
+    return {
+      ok: true,
+      json: async () => ({ content: [{ type: 'text', text: JSON.stringify(continuationExtraction) }] }),
+    };
+  };
 
   const extraction = await extractStage1(richSession(), arcState, { fetchFn: stubFetch, apiKey: 'k' });
+  assert.ok(capturedPrompt, 'Stage 1 should have sent a prompt');
+  assert.match(capturedPrompt, /pricing redesign/, 'Active arc should appear in the extraction prompt');
   assert.strictEqual(extraction.best_output_type, 'continuation');
   assert.strictEqual(extraction.active_arc, 'pricing redesign');
 });
