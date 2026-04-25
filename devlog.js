@@ -68,7 +68,7 @@ function projectSlug(dir) {
   if (!dir) return dir;
   const stripped = dir.replace(/^-/, '').replace(/-/g, '/');
   const last = stripped.split('/').filter(Boolean).pop();
-  return last || dir;
+  return last || '';
 }
 
 // ─── Session parsing ───────────────────────────────────────────────────────

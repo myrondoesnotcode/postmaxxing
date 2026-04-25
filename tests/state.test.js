@@ -13,3 +13,11 @@ test('projectSlug handles nested project name', () => {
 test('projectSlug returns empty string for empty input', () => {
   assert.strictEqual(projectSlug(''), '');
 });
+
+test('projectSlug returns last token for hyphenated project name (known limitation: encoding is lossy)', () => {
+  // Claude Code encodes paths by replacing '/' with '-'.
+  // A project at /Users/alice/my-cool-app encodes to -Users-alice-my-cool-app.
+  // There is no way to distinguish path separators from hyphens in the project name.
+  // The best we can do is return the last token, which will be 'app' not 'my-cool-app'.
+  assert.strictEqual(projectSlug('-Users-alice-my-cool-app'), 'app');
+});
