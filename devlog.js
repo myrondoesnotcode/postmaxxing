@@ -291,6 +291,33 @@ async function pickSession(sessions) {
   return sessions[Math.max(0, parseInt(answer || '1') - 1)] || sessions[0];
 }
 
+// ─── State management ─────────────────────────────────────────────────────
+
+const DEFAULT_STATE_DIR = path.join(os.homedir(), '.devlog', 'state');
+
+function emptyState() {
+  return { active_arcs: [], recent_posts: [], last_session_summary: null };
+}
+
+function loadState(slug, opts = {}) {
+  const dir = opts.stateDir || DEFAULT_STATE_DIR;
+  const file = path.join(dir, `${slug}.json`);
+  if (!fs.existsSync(file)) return emptyState();
+  try {
+    return JSON.parse(fs.readFileSync(file, 'utf8'));
+  } catch {
+    warn(`State file unreadable, starting fresh: ${file}`);
+    return emptyState();
+  }
+}
+
+function saveState(slug, state, opts = {}) {
+  const dir = opts.stateDir || DEFAULT_STATE_DIR;
+  fs.mkdirSync(dir, { recursive: true });
+  const file = path.join(dir, `${slug}.json`);
+  fs.writeFileSync(file, JSON.stringify(state, null, 2));
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function formatAge(date) {
@@ -356,5 +383,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug };
+  module.exports = { projectSlug, loadState, saveState };
 }
