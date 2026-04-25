@@ -35,6 +35,7 @@ const PROJECT_FILTER = getArg('--project');
 const DAYS_FILTER    = parseInt(getArg('--days') || '1');
 const STYLE_FILE     = getArg('--style');
 const PUSH_TO_TF     = hasFlag('--push');
+const SAVE_TO_NOTES  = hasFlag('--notes');
 const LIST_MODE      = hasFlag('--list');
 const MODE           = getArg('--mode')    || 'story';  // story | technical
 const CONTEXT        = getArg('--context') || null;     // optional one-line hint
@@ -439,7 +440,7 @@ function printResults(result, projectName) {
   });
 
   console.log(`${'─'.repeat(60)}`);
-  console.log(`  --mode story|technical  --count N  --push`);
+  console.log(`  --mode story|technical  --count N  --push  --notes`);
   console.log(`${'─'.repeat(60)}\n`);
 }
 
@@ -689,6 +690,13 @@ async function main() {
     await handlePushAndApproval(result, slug);
   } else if (result.candidates && result.candidates.length) {
     console.log(`  --push to send drafts to Typefully.\n`);
+  }
+
+  if (SAVE_TO_NOTES) {
+    const noteTitle   = `Devlog · ${session.project} · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+    const noteContent = buildNoteContent(result, session.project, MODE);
+    exportToNotes(noteTitle, noteContent);
+    console.log(`  ✓ Saved to Apple Notes: "${noteTitle}"\n`);
   }
 }
 
