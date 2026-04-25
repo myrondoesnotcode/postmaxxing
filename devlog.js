@@ -134,6 +134,128 @@ async function extractStage1(sessionText, state, opts) {
   catch { throw new Error(`Couldn't parse Stage 1 response:\n${raw}`); }
 }
 
+// ─── Stage 2: Generation ───────────────────────────────────────────────────
+
+const VOICE_RULES = `Voice rules (non-negotiable):
+- Specific over vague. Use real numbers and concrete details from the extraction.
+- Honest over hyped. No "excited to share", no "thrilled to", no "game-changer".
+- No em-dashes. Use commas, periods, or line breaks.
+- 1 hashtag max per post, often zero.
+- Lowercase opens are fine. Reads like a journal entry made public.
+- If something was wrong or surprising, say so plainly.`;
+
+const OUTPUT_FORMAT = `Return strict JSON only, no markdown fences:
+{
+  "candidates": [
+    {
+      "shape": "single" or "thread",
+      "type": "story" or "continuation" or "drip",
+      "label": "short descriptive label",
+      "text": "tweet text (for shape:single, otherwise null)",
+      "tweets": ["tweet 1", "tweet 2", ...] (for shape:thread, otherwise null),
+      "arc": "arc name this continues, or null",
+      "summary_for_state": "one-line summary of this post for the project journal"
+    }
+  ]
+}
+Single tweets must be ≤ 280 characters. Thread tweets must each be ≤ 280 characters.`;
+
+function formatExtraction(extraction) {
+  return JSON.stringify(extraction, null, 2);
+}
+
+function formatRecentPosts(state) {
+  if (!state.recent_posts.length) return 'No recent posts.';
+  return state.recent_posts.slice(-5).reverse()
+    .map(p => `- [${p.date}] (${p.type}) ${p.summary}`)
+    .join('\n');
+}
+
+function buildStoryPrompt(extraction, state, opts) {
+  const { count, voiceExamples } = opts;
+  const voiceBlock = voiceExamples
+    ? `\nThis person's real posts for tone reference:\n---\n${voiceExamples.slice(0, 2000)}\n---\n`
+    : '';
+
+  return `You are ghost-writing building-in-public posts. Lens: STORY — surface the product or business reasoning behind decisions. Who made a choice, why they made it, and what it means.
+
+Extraction (ground truth — every claim must trace here):
+${formatExtraction(extraction)}
+
+Recent posts (so you can write continuations and avoid repetition):
+${formatRecentPosts(state)}
+${voiceBlock}
+${VOICE_RULES}
+
+Generate ${count} candidates. Each candidate picks its own shape:
+- "single" when one tight insight lands in ≤ 280 chars
+- "thread" (3-5 tweets, each ≤ 280) when the reasoning needs space
+
+If best_output_type is "drip", keep it short and casual. If "continuation", reference the arc explicitly.
+
+${OUTPUT_FORMAT}`;
+}
+
+function buildTechnicalPrompt(extraction, state, opts) {
+  const { count, voiceExamples } = opts;
+  const voiceBlock = voiceExamples
+    ? `\nThis person's real posts for tone reference:\n---\n${voiceExamples.slice(0, 2000)}\n---\n`
+    : '';
+
+  return `You are ghost-writing building-in-public posts. Lens: TECHNICAL — surface the engineering decisions, stack choices, patterns, and trade-offs. Audience is developers who want the actual details. Don't dumb it down.
+
+Extraction (ground truth — every claim must trace here):
+${formatExtraction(extraction)}
+
+Recent posts (for continuation and avoiding repetition):
+${formatRecentPosts(state)}
+${voiceBlock}
+${VOICE_RULES}
+
+Generate ${count} candidates. Lean into specifics: library names, patterns, constraints, the trade-off accepted. Each candidate picks its own shape:
+- "single" for one sharp technical observation (≤ 280 chars)
+- "thread" for a chain of decisions or a non-obvious trade-off explained
+
+If best_output_type is "drip", keep it brief. If "continuation", reference the arc.
+
+${OUTPUT_FORMAT}`;
+}
+
+async function generateStage2(extraction, state, opts) {
+  const fetchFn      = opts.fetchFn || globalThis.fetch;
+  const { mode, count, voiceExamples, apiKey } = opts;
+  if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
+
+  const prompt = mode === 'technical'
+    ? buildTechnicalPrompt(extraction, state, { count, voiceExamples })
+    : buildStoryPrompt(extraction, state, { count, voiceExamples });
+
+  const res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: SONNET_MODEL,
+      max_tokens: 2500,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(`Sonnet API error: ${data.error?.message || res.statusText}`);
+  }
+
+  const raw   = data.content?.find(b => b.type === 'text')?.text || '';
+  const clean = raw.replace(/```json|```/g, '').trim();
+
+  try { return JSON.parse(clean); }
+  catch { throw new Error(`Couldn't parse Stage 2 response:\n${raw}`); }
+}
+
 // ─── Session discovery ─────────────────────────────────────────────────────
 
 function findSessions() {
@@ -504,5 +626,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1 };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2 };
 }
