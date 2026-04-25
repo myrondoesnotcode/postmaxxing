@@ -558,6 +558,50 @@ async function handlePushAndApproval(result, slug) {
   }
 }
 
+// ─── Notes export ──────────────────────────────────────────────────────────
+
+function buildNoteContent(result, projectName, mode, dateStr) {
+  const date    = dateStr || new Date().toISOString().slice(0, 10);
+  const divider = '─'.repeat(40);
+  const lines   = [];
+
+  lines.push(`MODE: ${mode}  |  ${date}`);
+  lines.push('');
+
+  const candidates = result.candidates || [];
+
+  if (candidates.length === 0) {
+    lines.push(`${projectName} — no candidates generated.`);
+    return lines.join('\n');
+  }
+
+  candidates.forEach((c, i) => {
+    lines.push(divider);
+    lines.push('');
+    const tag = `[${(c.shape || 'unknown').toUpperCase()} · ${(c.type || 'unknown').toUpperCase()}]`;
+    lines.push(`${i + 1}. ${tag} ${c.label || ''}`);
+
+    if (c.shape === 'single') {
+      const len = (c.text || '').length;
+      lines.push(`${len > 260 ? '⚠' : '✓'} ${len}/280`);
+      lines.push('');
+      lines.push(c.text || '');
+    } else {
+      const tweets = c.tweets || [];
+      lines.push(`${tweets.length} tweets`);
+      lines.push('');
+      tweets.forEach((t, j) => {
+        lines.push(`${j + 1}/${tweets.length}  ${t || ''}`);
+      });
+    }
+
+    lines.push('');
+  });
+
+  lines.push(divider);
+  return lines.join('\n');
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -628,5 +672,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2 };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent };
 }
