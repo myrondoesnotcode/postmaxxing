@@ -94,6 +94,7 @@ Rules:
   - "drip" if small but real (a brief update worth noting)
   - "nothing" if there is genuinely no signal worth sharing
 - quotable_lines: copy verbatim from what the user said in the session. Do not paraphrase.
+- active_arc: if best_output_type is "continuation", set this to the matching arc name from the active arcs list above; if "story" and the session starts a new ongoing theme, name it; otherwise null.
 - Only include items explicitly present in the session text below.
 
 Session:
@@ -315,7 +316,7 @@ async function generateTweets(session, projectName, styleExamples) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: 'claude-sonnet-4-6',
+      model: SONNET_MODEL,
       max_tokens: 2000,
       system: systemPrompt,
       messages: [{ role: 'user', content: userPrompt }],
