@@ -1,9 +1,10 @@
 #!/usr/bin/env node
 
-const fs   = require('fs');
-const path = require('path');
-const os   = require('os');
-const rl   = require('readline');
+const fs             = require('fs');
+const path           = require('path');
+const os             = require('os');
+const rl             = require('readline');
+const { execSync }   = require('child_process');
 
 function loadEnv() {
   const envPath = path.join(__dirname, '.env');
@@ -602,6 +603,28 @@ function buildNoteContent(result, projectName, mode, dateStr) {
   return lines.join('\n');
 }
 
+function exportToNotes(title, body, opts = {}) {
+  const platform = opts.platform || process.platform;
+  const execFn   = opts.execFn   || ((cmd) => execSync(cmd, { stdio: 'pipe' }));
+
+  if (platform !== 'darwin') {
+    warn('Apple Notes export is macOS only — skipping.');
+    return;
+  }
+
+  // Escape single quotes for AppleScript (replace with right single quotation mark)
+  const safeTitle = title.replace(/'/g, '\u2019');
+  const safeBody  = body.replace(/'/g, '\u2019').replace(/\n/g, '\\n');
+
+  const script = `tell application "Notes" to make new note at folder "Notes" with properties {name:"${safeTitle}", body:"${safeBody}"}`;
+
+  try {
+    execFn(`osascript -e '${script}'`);
+  } catch (e) {
+    warn(`Apple Notes export failed: ${e.message}`);
+  }
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -672,5 +695,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes };
 }

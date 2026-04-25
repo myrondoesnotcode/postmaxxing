@@ -58,3 +58,34 @@ test('buildNoteContent handles empty candidates gracefully', () => {
   assert.ok(typeof content === 'string');
   assert.match(content, /myproj/i);
 });
+
+const { exportToNotes } = require('../devlog.js');
+
+test('exportToNotes calls execFn with osascript command containing title and body', () => {
+  let capturedCmd = null;
+  const stubExec = (cmd) => { capturedCmd = cmd; };
+
+  exportToNotes('My Title', 'My Body', { execFn: stubExec });
+
+  assert.ok(capturedCmd, 'execFn should have been called');
+  assert.match(capturedCmd, /osascript/);
+  assert.match(capturedCmd, /My Title/);
+  assert.match(capturedCmd, /My Body/);
+});
+
+test('exportToNotes does not throw when execFn succeeds', () => {
+  const stubExec = () => {};
+  assert.doesNotThrow(() => exportToNotes('T', 'B', { execFn: stubExec }));
+});
+
+test('exportToNotes warns but does not throw when execFn throws', () => {
+  const stubExec = () => { throw new Error('osascript not found'); };
+  assert.doesNotThrow(() => exportToNotes('T', 'B', { execFn: stubExec }));
+});
+
+test('exportToNotes skips when platform is not darwin', () => {
+  let called = false;
+  const stubExec = () => { called = true; };
+  exportToNotes('T', 'B', { execFn: stubExec, platform: 'linux' });
+  assert.strictEqual(called, false, 'Should not call execFn on non-darwin');
+});
