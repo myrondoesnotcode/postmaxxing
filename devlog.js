@@ -318,6 +318,28 @@ function saveState(slug, state, opts = {}) {
   fs.writeFileSync(file, JSON.stringify(state, null, 2));
 }
 
+function recordApprovals(slug, approvals, opts = {}) {
+  const today = opts.today || new Date().toISOString().slice(0, 10);
+  const state = loadState(slug, opts);
+
+  for (const a of approvals) {
+    state.recent_posts.push({
+      date: today,
+      summary: a.summary,
+      type: a.type,
+    });
+    if (a.arc && !state.active_arcs.includes(a.arc)) {
+      state.active_arcs.push(a.arc);
+    }
+  }
+
+  if (state.recent_posts.length > 20) {
+    state.recent_posts = state.recent_posts.slice(-20);
+  }
+
+  saveState(slug, state, opts);
+}
+
 // ─── Helpers ───────────────────────────────────────────────────────────────
 
 function formatAge(date) {
@@ -383,5 +405,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals };
 }

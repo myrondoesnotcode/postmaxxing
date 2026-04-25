@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { projectSlug, loadState, saveState } = require('../devlog.js');
+const { projectSlug, loadState, saveState, recordApprovals } = require('../devlog.js');
 
 test('projectSlug extracts last segment from encoded path', () => {
   assert.strictEqual(projectSlug('-Users-myrons-Claude-Projects-clipmatic'), 'clipmatic');
@@ -57,4 +57,56 @@ test('loadState recovers from corrupt file by returning empty default', () => {
     recent_posts: [],
     last_session_summary: null,
   });
+});
+
+test('recordApprovals appends entries to recent_posts', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const slug = 'p1';
+  recordApprovals(slug, [
+    { summary: 'pricing decision', type: 'story', arc: null },
+  ], { stateDir: tmp, today: '2026-04-25' });
+
+  const state = loadState(slug, { stateDir: tmp });
+  assert.strictEqual(state.recent_posts.length, 1);
+  assert.deepStrictEqual(state.recent_posts[0], { date: '2026-04-25', summary: 'pricing decision', type: 'story' });
+});
+
+test('recordApprovals merges new arcs without duplicates', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const slug = 'p2';
+  saveState(slug, {
+    active_arcs: ['existing arc'],
+    recent_posts: [],
+    last_session_summary: null,
+  }, { stateDir: tmp });
+
+  recordApprovals(slug, [
+    { summary: 'x', type: 'story', arc: 'existing arc' },
+    { summary: 'y', type: 'story', arc: 'new arc' },
+  ], { stateDir: tmp });
+
+  const state = loadState(slug, { stateDir: tmp });
+  assert.deepStrictEqual(state.active_arcs.sort(), ['existing arc', 'new arc']);
+});
+
+test('recordApprovals trims recent_posts to last 20', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const slug = 'p3';
+  const existing = {
+    active_arcs: [],
+    recent_posts: Array.from({ length: 19 }, (_, i) => ({
+      date: '2026-04-01', summary: `old ${i}`, type: 'drip',
+    })),
+    last_session_summary: null,
+  };
+  saveState(slug, existing, { stateDir: tmp });
+
+  recordApprovals(slug, [
+    { summary: 'new one', type: 'story', arc: null },
+    { summary: 'new two', type: 'continuation', arc: null },
+  ], { stateDir: tmp, today: '2026-04-25' });
+
+  const state = loadState(slug, { stateDir: tmp });
+  assert.strictEqual(state.recent_posts.length, 20);
+  assert.strictEqual(state.recent_posts[state.recent_posts.length - 1].summary, 'new two');
 });
