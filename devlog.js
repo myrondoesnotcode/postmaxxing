@@ -17,10 +17,14 @@ function loadEnv() {
 }
 loadEnv();
 
-const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY;
-const TYPEFULLY_KEY = process.env.TYPEFULLY_API_KEY;
-const CLAUDE_DIR    = process.env.CLAUDE_PROJECTS_DIR || path.join(os.homedir(), '.claude', 'projects');
-const MAX_CHARS     = 12000;
+const ANTHROPIC_KEY      = process.env.ANTHROPIC_API_KEY;
+const TYPEFULLY_KEY      = process.env.TYPEFULLY_API_KEY;
+const CLAUDE_DIR         = process.env.CLAUDE_PROJECTS_DIR || path.join(os.homedir(), '.claude', 'projects');
+const MAX_CHARS          = 12000;
+const MIN_SESSION_BYTES  = 5 * 1024;
+const MIN_SESSION_LINES  = 8; // 4 exchanges × 2 messages
+const HAIKU_MODEL        = 'claude-haiku-4-5';
+const SONNET_MODEL       = 'claude-sonnet-4-6';
 
 const args     = process.argv.slice(2);
 const getArg   = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
@@ -34,6 +38,19 @@ const LIST_MODE      = hasFlag('--list');
 const FORMAT         = getArg('--format') || 'mix';   // single | thread | mix
 const TONE           = getArg('--tone')   || 'mix';   // technical | story | mix
 const COUNT          = parseInt(getArg('--count') || '5');
+
+// ─── Pre-gate ─────────────────────────────────────────────────────────────
+
+function passesPreGate(rawText) {
+  if (rawText.length < MIN_SESSION_BYTES) {
+    return { ok: false, reason: `Session too short (${rawText.length} bytes, need ${MIN_SESSION_BYTES}).` };
+  }
+  const lineCount = rawText.trim().split('\n').filter(Boolean).length;
+  if (lineCount < MIN_SESSION_LINES) {
+    return { ok: false, reason: `Session has too few messages (${lineCount} lines, need ${MIN_SESSION_LINES}).` };
+  }
+  return { ok: true };
+}
 
 // ─── Session discovery ─────────────────────────────────────────────────────
 
@@ -405,5 +422,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate };
 }
