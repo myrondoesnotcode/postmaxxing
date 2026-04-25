@@ -52,6 +52,87 @@ function passesPreGate(rawText) {
   return { ok: true };
 }
 
+// ─── Stage 1: Extraction ──────────────────────────────────────────────────
+
+function buildExtractionPrompt(sessionText, state) {
+  const arcsBlock = state.active_arcs.length
+    ? `Active feature arcs in flight:\n${state.active_arcs.map(a => `- ${a}`).join('\n')}`
+    : 'No active arcs yet.';
+
+  const recentBlock = state.recent_posts.length
+    ? `Recently posted (most recent first):\n${state.recent_posts.slice(-5).reverse().map(p => `- [${p.date}] (${p.type}) ${p.summary}`).join('\n')}`
+    : 'No recent posts.';
+
+  return `You are extracting reasoning and decisions from a coding session for a builder who shares their process publicly.
+
+${arcsBlock}
+
+${recentBlock}
+
+Read the session and return ONLY strict JSON — no prose, no markdown fences. Do not invent or infer anything not explicitly present in the session.
+
+Schema:
+{
+  "has_reasoning": boolean,
+  "best_output_type": "story" | "continuation" | "drip" | "nothing",
+  "active_arc": string | null,
+  "decisions": [
+    { "what": string, "why": string, "alternatives": [string], "tradeoff": string }
+  ],
+  "key_numbers": [string],
+  "wrong_about": string | null,
+  "moment_of_realization": string | null,
+  "quotable_lines": [string],
+  "technical_specifics": { "stack": [string], "patterns": [string], "constraints": [string] }
+}
+
+Rules:
+- has_reasoning: true only if the session contains an articulated decision, trade-off, or realization. Pure debugging without a "why" = false.
+- best_output_type:
+  - "story" if has_reasoning and the insight stands alone
+  - "continuation" if it extends one of the active arcs listed above
+  - "drip" if small but real (a brief update worth noting)
+  - "nothing" if there is genuinely no signal worth sharing
+- quotable_lines: copy verbatim from what the user said in the session. Do not paraphrase.
+- Only include items explicitly present in the session text below.
+
+Session:
+${sessionText}`;
+}
+
+async function extractStage1(sessionText, state, opts) {
+  const fetchFn = opts.fetchFn || globalThis.fetch;
+  const apiKey  = opts.apiKey;
+  if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
+
+  const prompt = buildExtractionPrompt(sessionText, state);
+
+  const res = await fetchFn('https://api.anthropic.com/v1/messages', {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'x-api-key': apiKey,
+      'anthropic-version': '2023-06-01',
+    },
+    body: JSON.stringify({
+      model: HAIKU_MODEL,
+      max_tokens: 1500,
+      messages: [{ role: 'user', content: prompt }],
+    }),
+  });
+
+  const data = await res.json();
+  if (!res.ok || data.error) {
+    throw new Error(`Haiku API error: ${data.error?.message || res.statusText}`);
+  }
+
+  const raw   = data.content?.find(b => b.type === 'text')?.text || '';
+  const clean = raw.replace(/```json|```/g, '').trim();
+
+  try { return JSON.parse(clean); }
+  catch { throw new Error(`Couldn't parse Stage 1 response:\n${raw}`); }
+}
+
 // ─── Session discovery ─────────────────────────────────────────────────────
 
 function findSessions() {
@@ -422,5 +503,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1 };
 }
