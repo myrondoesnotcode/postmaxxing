@@ -158,6 +158,7 @@ const OUTPUT_FORMAT = `Return strict JSON only, no markdown fences:
     }
   ]
 }
+Rules: for shape "single", tweets must be null. For shape "thread", text must be null.
 Single tweets must be ≤ 280 characters. Thread tweets must each be ≤ 280 characters.`;
 
 function formatExtraction(extraction) {
@@ -252,8 +253,13 @@ async function generateStage2(extraction, state, opts) {
   const raw   = data.content?.find(b => b.type === 'text')?.text || '';
   const clean = raw.replace(/```json|```/g, '').trim();
 
-  try { return JSON.parse(clean); }
-  catch { throw new Error(`Couldn't parse Stage 2 response:\n${raw}`); }
+  try {
+    const parsed = JSON.parse(clean);
+    if (!Array.isArray(parsed?.candidates)) {
+      throw new Error(`Stage 2 response missing candidates array:\n${raw}`);
+    }
+    return parsed;
+  } catch (e) { throw new Error(`Couldn't parse Stage 2 response: ${e.message}\n${raw}`); }
 }
 
 // ─── Session discovery ─────────────────────────────────────────────────────

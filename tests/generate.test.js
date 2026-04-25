@@ -142,3 +142,15 @@ test('generateStage2 throws on API error', async () => {
     /context window exceeded/
   );
 });
+
+test('generateStage2 throws when response is missing candidates array', async () => {
+  const stubFetch = async () => ({
+    ok: true,
+    json: async () => ({ content: [{ type: 'text', text: JSON.stringify({ items: [] }) }] }),
+  });
+
+  await assert.rejects(
+    generateStage2(sampleExtraction, emptyState, { mode: 'story', count: 1, fetchFn: stubFetch, apiKey: 'k' }),
+    /candidates/
+  );
+});
