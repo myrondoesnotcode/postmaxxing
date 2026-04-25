@@ -47,7 +47,7 @@ function findSessions() {
     .filter(d => d.isDirectory()).map(d => d.name);
 
   for (const dir of projectDirs) {
-    const projectName = decodeProjectDir(dir);
+    const projectName = projectSlug(dir);
     if (PROJECT_FILTER && !projectName.toLowerCase().includes(PROJECT_FILTER.toLowerCase())) continue;
 
     const dirPath = path.join(CLAUDE_DIR, dir);
@@ -64,10 +64,11 @@ function findSessions() {
   return sessions.sort((a, b) => b.mtime - a.mtime);
 }
 
-function decodeProjectDir(dir) {
-  try {
-    return path.basename(dir.replace(/^-/, '').replace(/-/g, '/')) || dir;
-  } catch { return dir; }
+function projectSlug(dir) {
+  if (!dir) return dir;
+  const stripped = dir.replace(/^-/, '').replace(/-/g, '/');
+  const last = stripped.split('/').filter(Boolean).pop();
+  return last || dir;
 }
 
 // ─── Session parsing ───────────────────────────────────────────────────────
@@ -352,4 +353,8 @@ async function main() {
   }
 }
 
-main().catch(e => die(e.message));
+if (require.main === module) {
+  main().catch(e => die(e.message));
+} else {
+  module.exports = { projectSlug };
+}
