@@ -1,0 +1,7 @@
+{"type":"user","message":{"content":"I'm thinking about pricing for Clipmatic. Right now it's $19/mo Starter. But I just looked at the unit economics."}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"What did you find?"}]}}
+{"type":"user","message":{"content":"Each scan costs me $0.16 in API. At $19, a heavy user (200 scans) costs me $32 — I'm losing $13/customer. Light users subsidize them but the ratio is wrong."}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"So you have a few options: raise prices, cap usage, or restructure tiers. What feels right?"}]}}
+{"type":"user","message":{"content":"I think $29 Starter with a 100-scan cap. Pro at $79 unlimited. The cap matters more than the price — most users are under 50 scans anyway."}}
+{"type":"assistant","message":{"content":[{"type":"text","text":"That makes sense. The cap is the real economic lever."}]}}
+{"type":"user","message":{"content":"Yeah. I had been carrying the wrong unit-economics number for three weeks. Thought hosting was the main cost. It's API."}}
