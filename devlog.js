@@ -610,7 +610,7 @@ function exportToNotes(title, body, opts = {}) {
 
   if (platform !== 'darwin') {
     warn('Apple Notes export is macOS only — skipping.');
-    return;
+    return false;
   }
 
   // Escape single quotes for AppleScript (replace with right single quotation mark)
@@ -621,8 +621,10 @@ function exportToNotes(title, body, opts = {}) {
 
   try {
     execFn(`osascript -e '${script}'`);
+    return true;
   } catch (e) {
     warn(`Apple Notes export failed: ${e.message}`);
+    return false;
   }
 }
 
@@ -695,8 +697,8 @@ async function main() {
   if (SAVE_TO_NOTES) {
     const noteTitle   = `Devlog · ${session.project} · ${new Date().toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
     const noteContent = buildNoteContent(result, session.project, MODE);
-    exportToNotes(noteTitle, noteContent);
-    console.log(`  ✓ Saved to Apple Notes: "${noteTitle}"\n`);
+    const saved = exportToNotes(noteTitle, noteContent);
+    if (saved) console.log(`  ✓ Saved to Apple Notes: "${noteTitle}"\n`);
   }
 }
 

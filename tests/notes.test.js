@@ -73,12 +73,13 @@ test('exportToNotes calls execFn with osascript command containing title and bod
   let capturedCmd = null;
   const stubExec = (cmd) => { capturedCmd = cmd; };
 
-  exportToNotes('My Title', 'My Body', { execFn: stubExec });
+  const result = exportToNotes('My Title', 'My Body', { execFn: stubExec });
 
   assert.ok(capturedCmd, 'execFn should have been called');
   assert.match(capturedCmd, /osascript/);
   assert.match(capturedCmd, /My Title/);
   assert.match(capturedCmd, /My Body/);
+  assert.strictEqual(result, true, 'Should return true on success');
 });
 
 test('exportToNotes does not throw when execFn succeeds', () => {
@@ -89,13 +90,16 @@ test('exportToNotes does not throw when execFn succeeds', () => {
 test('exportToNotes warns but does not throw when execFn throws', () => {
   const stubExec = () => { throw new Error('osascript not found'); };
   assert.doesNotThrow(() => exportToNotes('T', 'B', { execFn: stubExec }));
+  const result = exportToNotes('T', 'B', { execFn: stubExec });
+  assert.strictEqual(result, false, 'Should return false when execFn throws');
 });
 
 test('exportToNotes skips when platform is not darwin', () => {
   let called = false;
   const stubExec = () => { called = true; };
-  exportToNotes('T', 'B', { execFn: stubExec, platform: 'linux' });
+  const result = exportToNotes('T', 'B', { execFn: stubExec, platform: 'linux' });
   assert.strictEqual(called, false, 'Should not call execFn on non-darwin');
+  assert.strictEqual(result, false, 'Should return false when skipping');
 });
 
 test('exportToNotes escapes double quotes in title and body', () => {
