@@ -419,7 +419,7 @@ function printResults(result, projectName) {
   }
 
   result.candidates.forEach((c, i) => {
-    const tag = `[${c.shape.toUpperCase()} · ${c.type.toUpperCase()}]`;
+    const tag = `[${(c.shape || 'unknown').toUpperCase()} · ${(c.type || 'unknown').toUpperCase()}]`;
     console.log(`  ${i + 1}. ${tag}  ${c.label || ''}`);
     if (c.shape === 'single') {
       const len = (c.text || '').length;
@@ -429,9 +429,9 @@ function printResults(result, projectName) {
       const tweets = c.tweets || [];
       console.log(`     ${tweets.length} tweets\n`);
       tweets.forEach((t, j) => {
-        const len = t.length;
+        const len = (t || '').length;
         console.log(`     ${j + 1}/${tweets.length} ${len > 260 ? '⚠' : '✓'} ${len}/280`);
-        console.log(`     ${t.replace(/\n/g, '\n     ')}\n`);
+        console.log(`     ${(t || '').replace(/\n/g, '\n     ')}\n`);
       });
     }
     console.log(`  ${'·'.repeat(40)}\n`);
@@ -603,6 +603,8 @@ async function main() {
   process.stdout.write(' done\n');
 
   // Stage 1 gate: nothing to share
+  // If Stage 1 found nothing AND no arc is in flight, there's nothing to write about.
+  // If an arc is active, fall through — a drip update is still useful.
   if (extraction.best_output_type === 'nothing' && !extraction.active_arc) {
     console.log('\n  No story today.\n  Session had no articulated decisions or reasoning worth sharing.\n  Try a session where you talked through a choice or trade-off.\n');
     process.exit(0);
