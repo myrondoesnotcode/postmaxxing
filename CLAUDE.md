@@ -63,7 +63,7 @@ node --test tests/extract.test.js           # Stage 1 extraction
 node --test tests/generate.test.js          # Stage 2 generation prompts
 ```
 
-40 tests, zero npm dependencies.
+51 tests, zero npm dependencies.
 
 ## Environment variables (.env)
 
