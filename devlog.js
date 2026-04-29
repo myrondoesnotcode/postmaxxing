@@ -134,7 +134,10 @@ async function extractStage1(sessionText, state, opts) {
   }
 
   const raw   = data.content?.find(b => b.type === 'text')?.text || '';
-  const clean = raw.replace(/```json|```/g, '').trim();
+  // Strip markdown fences, then extract the first {...} block to handle leading prose
+  const stripped = raw.replace(/```json|```/g, '').trim();
+  const match    = stripped.match(/\{[\s\S]*\}/);
+  const clean    = match ? match[0] : stripped;
 
   try { return JSON.parse(clean); }
   catch { throw new Error(`Couldn't parse Stage 1 response:\n${raw}`); }
