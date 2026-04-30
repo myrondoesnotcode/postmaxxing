@@ -178,10 +178,163 @@ Single tweets must be ≤ 280 characters. Thread tweets must each be ≤ 280 cha
 
 const HTML_APP = `<!DOCTYPE html>
 <html lang="en">
-<head><meta charset="UTF-8"><title>devlog</title></head>
-<body style="background:#0d0d0d;color:#e8e8e8;font-family:sans-serif;padding:40px">
-  <h1>devlog</h1>
-  <p style="color:#666">UI coming soon — placeholder</p>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>devlog</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --bg: #0d0d0d; --bg2: #141414; --bg3: #1a1a1a;
+      --border: #222; --border2: #2a2a2a;
+      --text: #e8e8e8; --text2: #888; --text3: #555;
+      --blue: #1d6bf3; --blue2: #1a5fd4;
+      --green: #4caf50; --yellow: #ff9800; --red: #f44336;
+    }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    header { height: 52px; padding: 0 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+    .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
+    .logo em { color: var(--text3); font-style: normal; font-weight: 400; }
+    #session-info { font-size: 13px; color: var(--text2); }
+    .layout { display: flex; flex: 1; overflow: hidden; }
+    .sidebar { width: 260px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
+    .controls { padding: 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+    .mode-row { display: flex; gap: 6px; }
+    .mode-btn { flex: 1; padding: 6px 0; background: transparent; border: 1px solid var(--border2); border-radius: 5px; color: var(--text3); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
+    .mode-btn.active { background: var(--bg3); border-color: #444; color: var(--text); }
+    .count-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text2); }
+    .count-input { width: 44px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-size: 12px; padding: 4px 8px; text-align: center; }
+    .gen-btn { padding: 9px; background: var(--blue); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
+    .gen-btn:hover:not(:disabled) { background: var(--blue2); }
+    .gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .session-list { flex: 1; overflow-y: auto; }
+    .session-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #111; transition: background 0.1s; }
+    .session-item:hover { background: #111; }
+    .session-item.selected { background: rgba(29,107,243,0.08); border-left: 2px solid var(--blue); padding-left: 12px; }
+    .s-project { font-size: 13px; font-weight: 500; }
+    .s-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
+    .main { flex: 1; overflow-y: auto; padding: 24px; }
+    .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 14px; text-align: center; flex-direction: column; gap: 12px; }
+    .empty-icon { font-size: 36px; opacity: 0.3; }
+    .loading { display: flex; align-items: center; justify-content: center; height: 200px; gap: 12px; color: var(--text2); font-size: 14px; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .spinner { width: 18px; height: 18px; border: 2px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
+    .candidate { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 14px; }
+    .cand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
+    .badge { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 4px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); }
+    .cand-label { font-size: 13px; color: var(--text2); }
+    .tweet-box { font-family: 'SF Mono', 'Fira Code', Monaco, monospace; font-size: 13px; line-height: 1.65; color: var(--text); background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 12px; width: 100%; resize: vertical; min-height: 72px; }
+    .tweet-box:focus { outline: none; border-color: #383838; }
+    .tweet-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
+    .char-ok { color: var(--green); font-size: 12px; }
+    .char-warn { color: var(--yellow); font-size: 12px; }
+    .char-over { color: var(--red); font-size: 12px; }
+    .post-btn { padding: 6px 14px; background: #000; color: var(--text); border: 1px solid var(--border2); border-radius: 5px; font-size: 12px; font-weight: 500; cursor: pointer; transition: border-color 0.15s; }
+    .post-btn:hover { border-color: #555; }
+    .thread-tweet { margin-bottom: 12px; }
+    .thread-num { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
+    .msg-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-size: 14px; line-height: 1.6; color: var(--text2); }
+    .error-box { background: #1a0a0a; border: 1px solid #3a1515; border-radius: 8px; padding: 16px; font-size: 13px; color: #e57373; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="logo">devlog<em> ✦</em></div>
+    <div id="session-info"></div>
+  </header>
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="controls">
+        <div class="mode-row">
+          <button class="mode-btn active" id="btn-story" onclick="setMode('story')">Story</button>
+          <button class="mode-btn" id="btn-technical" onclick="setMode('technical')">Technical</button>
+        </div>
+        <div class="count-row">
+          <span>Candidates</span>
+          <input class="count-input" id="count" type="number" min="1" max="10" value="3">
+        </div>
+        <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>Generate</button>
+      </div>
+      <div class="session-list" id="session-list">
+        <div class="s-meta" style="padding:14px">Loading…</div>
+      </div>
+    </aside>
+    <main class="main" id="main">
+      <div class="empty-state">
+        <div class="empty-icon">✦</div>
+        <div>Select a session and hit Generate</div>
+      </div>
+    </main>
+  </div>
+  <script>
+    var selected = null, mode = 'story';
+    function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+    function charHtml(text) {
+      var n = (text||'').length, cls = n<=260?'char-ok':n<=280?'char-warn':'char-over', icon = n<=260?'✓':n<=280?'⚠':'✗';
+      return '<span class="'+cls+'">'+icon+' '+n+'/280</span>';
+    }
+    function updateChar(el, cid) { document.getElementById(cid).innerHTML = charHtml(el.value); }
+    function postToX(tid) { window.open('https://x.com/intent/tweet?text='+encodeURIComponent(document.getElementById(tid).value),'_blank'); }
+    function setMode(m) {
+      mode = m;
+      document.getElementById('btn-story').classList.toggle('active', m==='story');
+      document.getElementById('btn-technical').classList.toggle('active', m==='technical');
+    }
+    function pick(i) {
+      document.querySelectorAll('.session-item').forEach(function(el){el.classList.remove('selected');});
+      document.getElementById('si'+i).classList.add('selected');
+      selected = window.__sessions[i];
+      document.getElementById('session-info').textContent = selected.project+' · '+selected.age;
+      document.getElementById('gen-btn').disabled = false;
+    }
+    async function init() {
+      try {
+        var res = await fetch('/api/sessions'), sessions = await res.json();
+        window.__sessions = sessions;
+        var list = document.getElementById('session-list');
+        if (!sessions.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions. Run with --days 30.</div>'; return; }
+        list.innerHTML = sessions.map(function(s,i){ return '<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+esc(s.age)+' · '+s.sizeKb+'kb</div>'+'</div>'; }).join('');
+      } catch(e) { document.getElementById('session-list').innerHTML='<div class="s-meta" style="padding:14px;color:#e57373">Failed to load sessions</div>'; }
+    }
+    async function generate() {
+      if (!selected) return;
+      var count = parseInt(document.getElementById('count').value)||3;
+      var main = document.getElementById('main');
+      main.innerHTML = '<div class="loading"><div class="spinner"></div><span>Extracting reasoning…</span></div>';
+      document.getElementById('gen-btn').disabled = true;
+      try {
+        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:count})});
+        var data = await res.json();
+        if (data.error) { main.innerHTML='<div class="error-box">Error: '+esc(data.error)+'</div>'; }
+        else if (data.nothing||data.gateError) { main.innerHTML='<div class="msg-box">'+esc(data.message||data.gateError||'Nothing to share.')+'</div>'; }
+        else { renderCandidates(data.candidates||[]); }
+      } catch(e) { main.innerHTML='<div class="error-box">Request failed: '+esc(e.message)+'</div>'; }
+      finally { document.getElementById('gen-btn').disabled=false; }
+    }
+    function renderCandidates(candidates) {
+      var main = document.getElementById('main');
+      if (!candidates.length) { main.innerHTML='<div class="msg-box">No candidates returned.</div>'; return; }
+      main.innerHTML = candidates.map(function(c,i){
+        var badge = (c.shape||'single').toUpperCase()+' · '+(c.type||'story').toUpperCase(), label = esc(c.label||'');
+        if (c.shape==='thread') {
+          var tweets = c.tweets||[];
+          return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div><div>'+
+            tweets.map(function(t,j){ var tid='tw'+i+'_'+j, cid='cc'+i+'_'+j;
+              return '<div class="thread-tweet"><div class="thread-num">'+(j+1)+'/'+tweets.length+'</div>'+
+                '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\''+cid+'\')">'+esc(t||'')+'</textarea>'+
+                '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(t||'')+'</span>'+
+                '<button class="post-btn" onclick="postToX(\''+tid+'\')">Post to X →</button></div></div>';
+            }).join('')+'</div></div>';
+        }
+        var text=c.text||'', tid='tw'+i, cid='cc'+i;
+        return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div>'+
+          '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\''+cid+'\')">'+esc(text)+'</textarea>'+
+          '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(text)+'</span>'+
+          '<button class="post-btn" onclick="postToX(\''+tid+'\')">Post to X →</button></div></div>';
+      }).join('');
+    }
+    init();
+  </script>
 </body>
 </html>`;
 
