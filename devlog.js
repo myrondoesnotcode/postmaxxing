@@ -199,8 +199,33 @@ async function handleGetSessions(req, res) {
 }
 
 async function handlePostGenerate(req, res) {
-  res.writeHead(501, { 'Content-Type': 'application/json' });
-  res.end(JSON.stringify({ error: 'Not implemented yet' }));
+  let params;
+  try {
+    const body = await readBody(req);
+    params = JSON.parse(body);
+  } catch {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'Invalid JSON body' }));
+    return;
+  }
+
+  const { sessionFile, mode, count } = params;
+  if (!sessionFile) {
+    res.writeHead(400, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: 'sessionFile is required' }));
+    return;
+  }
+
+  try {
+    const result = await runPipeline(sessionFile, mode || 'story', count || 3, {
+      apiKey: ANTHROPIC_KEY,
+    });
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify(result));
+  } catch (e) {
+    res.writeHead(500, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ error: e.message }));
+  }
 }
 
 async function handleRequest(req, res) {
@@ -725,10 +750,10 @@ function readBody(req) {
 }
 
 async function runPipeline(sessionFile, mode, count, opts = {}) {
+  if (!fs.existsSync(sessionFile)) return { gateError: 'Session file not found.' };
+
   const apiKey = opts.apiKey || ANTHROPIC_KEY;
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
-
-  if (!fs.existsSync(sessionFile)) return { gateError: 'Session file not found.' };
 
   const rawText = fs.readFileSync(sessionFile, 'utf8');
   const gate    = passesPreGate(rawText);

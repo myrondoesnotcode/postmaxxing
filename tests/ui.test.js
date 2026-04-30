@@ -115,6 +115,24 @@ test('GET /unknown returns 404', async () => {
   }
 });
 
+async function post(port, urlPath, body) {
+  return new Promise((resolve, reject) => {
+    const data = JSON.stringify(body);
+    const req  = http.request({
+      hostname: '127.0.0.1', port, path: urlPath,
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(data) },
+    }, res => {
+      const chunks = [];
+      res.on('data', c => chunks.push(c));
+      res.on('end', () => resolve({ status: res.statusCode, body: JSON.parse(Buffer.concat(chunks).toString()) }));
+    });
+    req.on('error', reject);
+    req.write(data);
+    req.end();
+  });
+}
+
 test('GET /api/sessions returns 200 with JSON array', async () => {
   const server = await serveUi({ port: 0, skipOpen: true });
   try {
@@ -131,6 +149,30 @@ test('GET /api/sessions returns 200 with JSON array', async () => {
       assert.ok(typeof s.sizeKb  === 'number');
       assert.ok(typeof s.age     === 'string');
     }
+  } finally {
+    await new Promise(r => server.close(r));
+  }
+});
+
+test('POST /api/generate without sessionFile returns 400', async () => {
+  const server = await serveUi({ port: 0, skipOpen: true });
+  try {
+    const port = server.address().port;
+    const res  = await post(port, '/api/generate', { mode: 'story', count: 2 });
+    assert.strictEqual(res.status, 400);
+    assert.ok(res.body.error);
+  } finally {
+    await new Promise(r => server.close(r));
+  }
+});
+
+test('POST /api/generate with non-existent file returns gateError in body', async () => {
+  const server = await serveUi({ port: 0, skipOpen: true });
+  try {
+    const port = server.address().port;
+    const res  = await post(port, '/api/generate', { sessionFile: '/tmp/nonexistent.jsonl', mode: 'story', count: 2 });
+    assert.strictEqual(res.status, 200);
+    assert.ok(res.body.gateError);
   } finally {
     await new Promise(r => server.close(r));
   }
