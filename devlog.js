@@ -174,6 +174,83 @@ const OUTPUT_FORMAT = `Return strict JSON only, no markdown fences:
 Rules: for shape "single", tweets must be null. For shape "thread", text must be null.
 Single tweets must be ≤ 280 characters. Thread tweets must each be ≤ 280 characters.`;
 
+// ─── Web UI ────────────────────────────────────────────────────────────────
+
+const HTML_APP = `<!DOCTYPE html>
+<html lang="en">
+<head><meta charset="UTF-8"><title>devlog</title></head>
+<body style="background:#0d0d0d;color:#e8e8e8;font-family:sans-serif;padding:40px">
+  <h1>devlog</h1>
+  <p style="color:#666">UI coming soon — placeholder</p>
+</body>
+</html>`;
+
+async function handleGetSessions(req, res) {
+  const sessions = findSessions({ days: 90 });
+  const data = sessions.map(s => ({
+    project: s.project,
+    file:    s.file,
+    mtime:   s.mtime.toISOString(),
+    sizeKb:  Math.round(s.size / 1024),
+    age:     formatAge(s.mtime),
+  }));
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify(data));
+}
+
+async function handlePostGenerate(req, res) {
+  res.writeHead(501, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not implemented yet' }));
+}
+
+async function handleRequest(req, res) {
+  const urlPath = req.url.split('?')[0];
+
+  if (req.method === 'GET' && urlPath === '/') {
+    res.writeHead(200, { 'Content-Type': 'text/html' });
+    res.end(HTML_APP);
+    return;
+  }
+
+  if (req.method === 'GET' && urlPath === '/api/sessions') {
+    await handleGetSessions(req, res);
+    return;
+  }
+
+  if (req.method === 'POST' && urlPath === '/api/generate') {
+    await handlePostGenerate(req, res);
+    return;
+  }
+
+  res.writeHead(404, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify({ error: 'Not found' }));
+}
+
+async function serveUi(opts = {}) {
+  const port     = opts.port !== undefined ? opts.port : UI_PORT;
+  const skipOpen = opts.skipOpen || false;
+
+  const server = http.createServer(async (req, res) => {
+    try {
+      await handleRequest(req, res);
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
+  });
+
+  await new Promise((resolve, reject) => {
+    server.listen(port, '127.0.0.1', resolve);
+    server.on('error', reject);
+  });
+
+  const actualPort = server.address().port;
+  console.log(`\n  devlog UI  →  http://localhost:${actualPort}\n`);
+  if (!skipOpen) exec(`open http://localhost:${actualPort}`);
+
+  return server;
+}
+
 function formatExtraction(extraction) {
   return JSON.stringify(extraction, null, 2);
 }
@@ -754,7 +831,8 @@ async function main() {
 }
 
 if (require.main === module) {
-  main().catch(e => die(e.message));
+  if (USE_UI) serveUi().catch(e => die(e.message));
+  else main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes, runPipeline };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes, runPipeline, serveUi };
 }
