@@ -5,6 +5,8 @@ const path           = require('path');
 const os             = require('os');
 const rl             = require('readline');
 const { execSync }   = require('child_process');
+const { exec }       = require('child_process');
+const http           = require('http');
 
 function loadEnv() {
   const envPath = path.join(__dirname, '.env');
@@ -37,6 +39,8 @@ const STYLE_FILE     = getArg('--style');
 const PUSH_TO_TF     = hasFlag('--push');
 const SAVE_TO_NOTES  = hasFlag('--notes');
 const LIST_MODE      = hasFlag('--list');
+const USE_UI         = hasFlag('--ui');
+const UI_PORT        = parseInt(getArg('--port') || '3000');
 const MODE           = getArg('--mode')    || 'story';  // story | technical
 const CONTEXT        = getArg('--context') || null;     // optional one-line hint
 const COUNT          = parseInt(getArg('--count') || '5');
@@ -273,10 +277,11 @@ async function generateStage2(extraction, state, opts) {
 
 // ─── Session discovery ─────────────────────────────────────────────────────
 
-function findSessions() {
+function findSessions(opts = {}) {
   if (!fs.existsSync(CLAUDE_DIR)) die(`Claude projects dir not found: ${CLAUDE_DIR}`);
 
-  const cutoff   = Date.now() - DAYS_FILTER * 24 * 60 * 60 * 1000;
+  const days   = (opts.days !== undefined) ? opts.days : DAYS_FILTER;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
   const sessions = [];
 
   const projectDirs = fs.readdirSync(CLAUDE_DIR, { withFileTypes: true })
@@ -631,6 +636,49 @@ function exportToNotes(title, body, opts = {}) {
   }
 }
 
+// ─── Pipeline ─────────────────────────────────────────────────────────────
+
+function readBody(req) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    req.on('data', chunk => chunks.push(chunk));
+    req.on('end', () => resolve(Buffer.concat(chunks).toString()));
+    req.on('error', reject);
+  });
+}
+
+async function runPipeline(sessionFile, mode, count, opts = {}) {
+  const apiKey = opts.apiKey || ANTHROPIC_KEY;
+  if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
+
+  if (!fs.existsSync(sessionFile)) return { gateError: 'Session file not found.' };
+
+  const rawText = fs.readFileSync(sessionFile, 'utf8');
+  const gate    = passesPreGate(rawText);
+  if (!gate.ok) return { gateError: gate.reason };
+
+  const messages         = parseSession(sessionFile);
+  const chunk            = chunkSession(messages);
+  const slug             = projectSlug(path.basename(path.dirname(sessionFile)));
+  const state            = loadState(slug, opts);
+  const voiceExamples    = STYLE_FILE ? loadStyle(STYLE_FILE) : null;
+  const sessionForPrompt = CONTEXT ? `Manual context from author: ${CONTEXT}\n\n---\n\n${chunk}` : chunk;
+
+  const extraction = await extractStage1(sessionForPrompt, state, { apiKey, fetchFn: opts.fetchFn });
+
+  if (extraction.best_output_type === 'nothing' && !extraction.active_arc) {
+    return { nothing: true, message: 'Session had no articulated decisions or reasoning worth sharing.' };
+  }
+
+  return generateStage2(extraction, state, {
+    mode: mode || 'story',
+    count: count || 3,
+    voiceExamples,
+    apiKey,
+    fetchFn: opts.fetchFn,
+  });
+}
+
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
@@ -708,5 +756,5 @@ async function main() {
 if (require.main === module) {
   main().catch(e => die(e.message));
 } else {
-  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes };
+  module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes, runPipeline };
 }
