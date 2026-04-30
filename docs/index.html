@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>devlog — turn your Claude Code sessions into posts worth reading</title>
+  <meta name="description" content="Devlog reads your Claude Code sessions, finds the reasoning behind your decisions, and writes the tweet. You hit Post.">
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root { --bg: #0d0d0d; --bg2: #141414; --border: #222; --text: #e8e8e8; --text2: #888; --text3: #555; --blue: #1d6bf3; }
+    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
+    a { color: var(--blue); text-decoration: none; }
+    a:hover { text-decoration: underline; }
+
+    nav { padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
+    .nav-logo { font-weight: 700; font-size: 18px; letter-spacing: -0.3px; }
+    .nav-link { font-size: 14px; color: var(--text2); }
+
+    .hero { max-width: 720px; margin: 0 auto; padding: 80px 40px 60px; text-align: center; }
+    .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 700; letter-spacing: -1px; line-height: 1.15; margin-bottom: 20px; }
+    .hero h1 em { color: var(--text3); font-style: normal; }
+    .hero p { font-size: 18px; color: var(--text2); max-width: 520px; margin: 0 auto 36px; }
+    .install { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 24px; font-family: 'SF Mono', Monaco, monospace; font-size: 14px; display: inline-block; margin-bottom: 12px; }
+    .install span { color: var(--text3); }
+    .sub-install { font-size: 13px; color: var(--text3); }
+
+    .screenshot { max-width: 900px; margin: 0 auto 80px; padding: 0 40px; }
+    .screen-frame { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
+    .screen-bar { height: 36px; background: #111; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; gap: 7px; }
+    .dot { width: 11px; height: 11px; border-radius: 50%; }
+    .dot-r { background: #ff5f57; } .dot-y { background: #febc2e; } .dot-g { background: #28c840; }
+    .screen-body { display: flex; height: 400px; }
+    .screen-sidebar { width: 220px; border-right: 1px solid var(--border); padding: 14px; flex-shrink: 0; }
+    .screen-main { flex: 1; padding: 20px; }
+    .fake-item { padding: 8px 10px; border-radius: 5px; margin-bottom: 4px; font-size: 12px; }
+    .fake-item.sel { background: rgba(29,107,243,0.1); border-left: 2px solid #1d6bf3; }
+    .fake-item .p { font-weight: 600; color: var(--text); }
+    .fake-item .m { color: var(--text3); font-size: 11px; }
+    .fake-card { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
+    .fake-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; background: #1a1a1a; border: 1px solid #2a2a2a; color: #888; display: inline-block; margin-bottom: 10px; }
+    .fake-tweet { font-family: monospace; font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 10px; }
+    .fake-footer { display: flex; justify-content: space-between; align-items: center; }
+    .fake-count { font-size: 11px; color: #4caf50; }
+    .fake-btn { font-size: 11px; padding: 4px 10px; background: #000; border: 1px solid #333; border-radius: 4px; color: var(--text); }
+
+    .examples { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
+    .examples h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; text-align: center; }
+    .examples-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 36px; }
+    .example-tweet { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 14px; font-size: 14px; line-height: 1.7; }
+    .example-tweet .label { font-size: 11px; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+
+    .how { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
+    .how h2 { font-size: 24px; font-weight: 600; margin-bottom: 36px; text-align: center; }
+    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    .step { text-align: center; }
+    .step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--bg2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; margin: 0 auto 12px; }
+    .step h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
+    .step p { font-size: 13px; color: var(--text2); }
+
+    .meta { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; text-align: center; }
+    .meta p { font-size: 14px; color: var(--text2); margin-bottom: 8px; }
+
+    footer { border-top: 1px solid var(--border); padding: 24px 40px; text-align: center; font-size: 13px; color: var(--text3); }
+
+    @media (max-width: 600px) {
+      .steps { grid-template-columns: 1fr; }
+      .hero, .screenshot, .examples, .how, .meta { padding: 0 20px; }
+      .hero { padding-top: 48px; }
+      .screen-body { height: auto; flex-direction: column; }
+      .screen-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+    }
+  </style>
+</head>
+<body>
+  <nav>
+    <div class="nav-logo">devlog ✦</div>
+    <a href="https://github.com/myrons/devlog" class="nav-link">GitHub →</a>
+  </nav>
+
+  <section class="hero">
+    <h1>Turn your Claude Code sessions into<br><em>posts people actually want to read</em></h1>
+    <p>Devlog finds the reasoning behind your decisions and writes the tweet. You hit Post.</p>
+    <div class="install"><span>$</span> git clone https://github.com/myrons/devlog &amp;&amp; node devlog.js --ui</div><br>
+    <div class="sub-install">macOS · Node 18+ · zero dependencies</div>
+  </section>
+
+  <section class="screenshot">
+    <div class="screen-frame">
+      <div class="screen-bar">
+        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
+      </div>
+      <div class="screen-body">
+        <div class="screen-sidebar">
+          <div style="font-size:11px;color:#555;margin-bottom:10px">Sessions</div>
+          <div class="fake-item sel"><div class="p">clipmatic</div><div class="m">2h ago · 14kb</div></div>
+          <div class="fake-item"><div class="p">parsha</div><div class="m">5h ago · 4235kb</div></div>
+          <div class="fake-item"><div class="p">devlog</div><div class="m">1d ago · 1461kb</div></div>
+        </div>
+        <div class="screen-main">
+          <div class="fake-card">
+            <div class="fake-badge">SINGLE · STORY</div>
+            <div class="fake-tweet">three weeks with the wrong number.<br>$0.16/scan at $19 = losing money on<br>every heavy user. fixed: $29 + 100-scan<br>cap. most users do under 50 anyway.</div>
+            <div class="fake-footer">
+              <div class="fake-count">✓ 187/280</div>
+              <div class="fake-btn">Post to X →</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="examples">
+    <h2>Real output</h2>
+    <p class="examples-sub">Generated from actual Claude Code sessions — unedited</p>
+    <div class="example-tweet">
+      <div class="label">Story · single</div>
+      three weeks with the wrong number. $0.16/scan at $19 = losing money on every heavy user. fixed: $29 + 100-scan cap. most users do under 50 anyway.
+    </div>
+    <div class="example-tweet">
+      <div class="label">Story · thread (1/3)</div>
+      found 9 Christian references buried in Parsha Map's content. 4 direct Gospel mentions, 2 NT citations, 1 Tissot painting of Jesus healing lepers — in a Jewish Torah learning app. had to clean it all out.
+    </div>
+    <div class="example-tweet">
+      <div class="label">Technical · single</div>
+      <code>systemBackgroundColor</code> in LaunchScreen.storyboard resolves to black in dark mode. hardcoded <code>#fcf9f0</code> instead. less dynamic, guaranteed correct. sometimes the boring fix is the right fix.
+    </div>
+  </section>
+
+  <section class="how">
+    <h2>How it works</h2>
+    <div class="steps">
+      <div class="step">
+        <div class="step-num">1</div>
+        <h3>Session</h3>
+        <p>Pick any Claude Code session. Devlog reads the conversation, not the diff.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">2</div>
+        <h3>Extract</h3>
+        <p>Haiku finds the decisions, trade-offs, and numbers. Sonnet turns them into posts.</p>
+      </div>
+      <div class="step">
+        <div class="step-num">3</div>
+        <h3>Post</h3>
+        <p>Edit inline. Hit Post to X. One click opens a pre-filled tweet composer.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="meta">
+    <p>Built in public using itself. Every post about building devlog was generated by devlog.</p>
+    <p><a href="https://x.com/myrons">Follow the build →</a></p>
+  </section>
+
+  <footer>
+    devlog is open source · <a href="https://github.com/myrons/devlog">github.com/myrons/devlog</a>
+  </footer>
+</body>
+</html>
