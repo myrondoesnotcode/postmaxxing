@@ -8,17 +8,37 @@ const { execSync }   = require('child_process');
 const { exec }       = require('child_process');
 const http           = require('http');
 
+const CONFIG_DIR  = path.join(os.homedir(), '.postmaxxing');
+const CONFIG_FILE = path.join(CONFIG_DIR, 'config');
+
 function loadEnv() {
-  const envPath = path.join(__dirname, '.env');
-  if (!fs.existsSync(envPath)) return;
-  fs.readFileSync(envPath, 'utf8')
-    .split('\n')
-    .forEach(line => {
-      const [k, ...v] = line.split('=');
-      if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
-    });
+  // load from ~/.postmaxxing/config first (npx-friendly), then local .env
+  for (const envPath of [CONFIG_FILE, path.join(__dirname, '.env')]) {
+    if (!fs.existsSync(envPath)) continue;
+    fs.readFileSync(envPath, 'utf8')
+      .split('\n')
+      .forEach(line => {
+        const [k, ...v] = line.split('=');
+        if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
+      });
+  }
 }
 loadEnv();
+
+async function setupFirstRun() {
+  if (process.env.ANTHROPIC_API_KEY) return;
+  console.log('\n  postmaxx_ — first run setup\n');
+  console.log('  Get your API key at: https://console.anthropic.com/settings/keys\n');
+  const key = await prompt('  Paste your Anthropic API key: ');
+  if (!key || !key.trim().startsWith('sk-')) {
+    console.error('\n  ✗ Invalid key. Run again and paste a key starting with sk-\n');
+    process.exit(1);
+  }
+  if (!fs.existsSync(CONFIG_DIR)) fs.mkdirSync(CONFIG_DIR, { recursive: true });
+  fs.writeFileSync(CONFIG_FILE, `ANTHROPIC_API_KEY=${key.trim()}\n`, { mode: 0o600 });
+  process.env.ANTHROPIC_API_KEY = key.trim();
+  console.log('  ✓ Key saved to ~/.postmaxxing/config\n');
+}
 
 const ANTHROPIC_KEY      = process.env.ANTHROPIC_API_KEY;
 const TYPEFULLY_KEY      = process.env.TYPEFULLY_API_KEY;
@@ -150,12 +170,26 @@ async function extractStage1(sessionText, state, opts) {
 // ─── Stage 2: Generation ───────────────────────────────────────────────────
 
 const VOICE_RULES = `Voice rules (non-negotiable):
-- Specific over vague. Use real numbers and concrete details from the extraction.
-- Honest over hyped. No "excited to share", no "thrilled to", no "game-changer".
-- No em-dashes. Use commas, periods, or line breaks.
-- 1 hashtag max per post, often zero.
-- Lowercase opens are fine. Reads like a journal entry made public.
-- If something was wrong or surprising, say so plainly.`;
+- Write like a founder texting a smart friend, not a content creator performing transparency.
+- Open with tension, surprise, or a specific problem — never with context-setting or "so I've been building".
+- Specific over vague. Real numbers, real names, real constraints. "4 hours" beats "a while". "Haiku" beats "a smaller model".
+- "I was wrong about X" outperforms "I learned X". Vulnerability beats expertise signaling.
+- No em-dashes. No "excited to share", "thrilled to announce", "game-changer", "journey".
+- No hashtags unless one is genuinely relevant. Never #buildinpublic.
+- Lowercase opens are fine. Short sentences. No padding.
+- If the session had a realization or reversal, that IS the story — lead with it.
+- Threads: tweet 1 is a HOOK that creates tension without resolving it. Each subsequent tweet earns the next read. Last tweet lands the point or asks something real.`;
+
+const SINGLE_EXAMPLES = `What good single tweets look like:
+"spent 3 hours debugging a race condition. turned out i was calling the wrong function. the correct function existed 20 lines above it."
+"decided to cut the feature i spent 2 weeks on. it was technically impressive and nobody asked for it."
+"users don't want X, they want Y. took 40 support tickets to understand the difference."`;
+
+const THREAD_EXAMPLES = `What good thread hooks look like (tweet 1 only):
+"i almost shipped the wrong architecture. here's what changed my mind:"
+"we had 3 approaches. picked the worst one first. this is why:"
+"the bug wasn't in the code. it was in my assumption about how the API worked."
+Note: hooks end with a colon or create a gap the reader must fill. Never summarize the thread in tweet 1.`;
 
 const OUTPUT_FORMAT = `Return strict JSON only, no markdown fences:
 {
@@ -181,65 +215,129 @@ const HTML_APP = `<!DOCTYPE html>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>devlog</title>
+  <title>postmaxx_</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root {
-      --bg: #0d0d0d; --bg2: #141414; --bg3: #1a1a1a;
-      --border: #222; --border2: #2a2a2a;
-      --text: #e8e8e8; --text2: #888; --text3: #555;
-      --blue: #1d6bf3; --blue2: #1a5fd4;
-      --green: #4caf50; --yellow: #ff9800; --red: #f44336;
+      --bg: #0a0a0a;
+      --card: #111;
+      --card2: #141414;
+      --border: #222;
+      --border2: #2a2a2a;
+      --green: #CDFF00;
+      --white: #F0EFE8;
+      --muted: #666;
+      --muted2: #999;
+      --red: #FF6B6B;
+      --yellow: #f5a623;
     }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
-    header { height: 52px; padding: 0 20px; border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
-    .logo { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
-    .logo em { color: var(--text3); font-style: normal; font-weight: 400; }
-    #session-info { font-size: 13px; color: var(--text2); }
+    body { font-family: 'DM Sans', sans-serif; background: var(--bg); color: var(--white); height: 100vh; display: flex; flex-direction: column; overflow: hidden; }
+    a { text-decoration: none; color: inherit; }
+
+    /* header */
+    header { height: 54px; padding: 0 24px; border-bottom: 1px solid var(--border); display: flex; align-items: center; justify-content: space-between; flex-shrink: 0; }
+    .logo { font-family: 'JetBrains Mono', monospace; font-size: 16px; font-weight: 700; letter-spacing: -0.5px; color: var(--white); }
+    .logo span { color: var(--green); }
+    #session-info { font-size: 12px; color: var(--muted2); font-family: 'JetBrains Mono', monospace; }
+
+    /* layout */
     .layout { display: flex; flex: 1; overflow: hidden; }
-    .sidebar { width: 260px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; }
-    .controls { padding: 14px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 10px; }
+    .sidebar { width: 264px; flex-shrink: 0; border-right: 1px solid var(--border); display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
+    .controls { padding: 16px; border-bottom: 1px solid var(--border); display: flex; flex-direction: column; gap: 12px; }
+
+    /* mode buttons */
     .mode-row { display: flex; gap: 6px; }
-    .mode-btn { flex: 1; padding: 6px 0; background: transparent; border: 1px solid var(--border2); border-radius: 5px; color: var(--text3); font-size: 12px; font-weight: 500; cursor: pointer; transition: all 0.15s; }
-    .mode-btn.active { background: var(--bg3); border-color: #444; color: var(--text); }
-    .count-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--text2); }
-    .count-input { width: 44px; background: var(--bg3); border: 1px solid var(--border2); border-radius: 4px; color: var(--text); font-size: 12px; padding: 4px 8px; text-align: center; }
-    .gen-btn { padding: 9px; background: var(--blue); color: #fff; border: none; border-radius: 6px; font-size: 13px; font-weight: 500; cursor: pointer; transition: background 0.15s; }
-    .gen-btn:hover:not(:disabled) { background: var(--blue2); }
-    .gen-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+    .mode-btn { flex: 1; padding: 7px 0; background: transparent; border: 1px solid var(--border2); color: var(--muted2); font-size: 12px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; letter-spacing: .03em; text-transform: uppercase; }
+    .mode-btn.active { background: var(--card2); border-color: #444; color: var(--white); }
+    .mode-btn:hover:not(.active) { border-color: #333; color: var(--muted); }
+
+    /* count */
+    .count-row { display: flex; align-items: center; justify-content: space-between; font-size: 12px; color: var(--muted2); }
+    .count-input { width: 44px; background: var(--card2); border: 1px solid var(--border2); color: var(--white); font-size: 12px; padding: 5px 8px; text-align: center; font-family: 'JetBrains Mono', monospace; }
+    .count-input:focus { outline: none; border-color: var(--green); }
+
+    /* context */
+    .ctx-label { font-size: 11px; color: var(--muted); margin-bottom: 5px; text-transform: uppercase; letter-spacing: .06em; font-weight: 600; }
+    .ctx-area { width: 100%; background: var(--card2); border: 1px solid var(--border2); color: var(--muted2); font-size: 12px; padding: 8px 10px; resize: none; height: 54px; font-family: 'DM Sans', sans-serif; line-height: 1.5; }
+    .ctx-area:focus { outline: none; border-color: #444; color: var(--white); }
+    .ctx-area::placeholder { color: var(--muted); }
+
+    /* generate button */
+    .gen-btn { padding: 10px; background: var(--green); color: #000; border: none; font-size: 13px; font-weight: 700; font-family: 'DM Sans', sans-serif; cursor: pointer; letter-spacing: .02em; transition: opacity 0.15s; text-transform: uppercase; }
+    .gen-btn:hover:not(:disabled) { opacity: .88; }
+    .gen-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+
+    /* session list */
     .session-list { flex: 1; overflow-y: auto; }
-    .session-item { padding: 10px 14px; cursor: pointer; border-bottom: 1px solid #111; transition: background 0.1s; }
-    .session-item:hover { background: #111; }
-    .session-item.selected { background: rgba(29,107,243,0.08); border-left: 2px solid var(--blue); padding-left: 12px; }
-    .s-project { font-size: 13px; font-weight: 500; }
-    .s-meta { font-size: 11px; color: var(--text3); margin-top: 2px; }
-    .main { flex: 1; overflow-y: auto; padding: 24px; }
-    .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; color: var(--text3); font-size: 14px; text-align: center; flex-direction: column; gap: 12px; }
-    .empty-icon { font-size: 36px; opacity: 0.3; }
-    .loading { display: flex; align-items: center; justify-content: center; height: 200px; gap: 12px; color: var(--text2); font-size: 14px; }
+    .day-header { padding: 10px 16px 5px; font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
+    .day-header:first-child { border-top: none; }
+    .session-item { padding: 10px 16px; cursor: pointer; border-bottom: 1px solid #0f0f0f; transition: background 0.1s; }
+    .session-item:hover { background: var(--card); }
+    .session-item.selected { background: rgba(205,255,0,0.05); border-left: 2px solid var(--green); padding-left: 14px; }
+    .s-project { font-size: 13px; font-weight: 600; color: var(--white); }
+    .s-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+
+    /* main */
+    .main { flex: 1; overflow-y: auto; padding: 28px; }
+    .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
+    .empty-logo { font-family: 'Bebas Neue', sans-serif; font-size: 72px; line-height: 1; color: var(--border2); letter-spacing: 2px; }
+    .empty-steps { font-size: 13px; color: var(--muted); line-height: 2.2; text-align: left; }
+    .empty-steps span { color: var(--green); font-weight: 700; }
+
+    /* preview */
+    .preview-card { background: var(--card); border: 1px solid var(--border); padding: 18px; margin-bottom: 20px; }
+    .preview-title { font-size: 10px; font-weight: 700; color: var(--muted); letter-spacing: .1em; text-transform: uppercase; margin-bottom: 10px; font-family: 'JetBrains Mono', monospace; }
+    .preview-text { font-size: 13px; color: var(--muted2); line-height: 1.65; white-space: pre-wrap; word-break: break-word; max-height: 130px; overflow: hidden; position: relative; }
+    .preview-text::after { content: ''; position: absolute; bottom: 0; left: 0; right: 0; height: 36px; background: linear-gradient(transparent, var(--card)); }
+    .preview-hint { font-size: 12px; color: var(--muted); text-align: center; padding-top: 10px; }
+
+    /* signal */
+    .signal-bar { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; font-size: 12px; padding: 9px 14px; border: 1px solid var(--border); background: var(--card); }
+    .signal-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+    .signal-good { background: var(--green); }
+    .signal-weak { background: var(--yellow); }
+    .signal-text { color: var(--muted2); font-family: 'JetBrains Mono', monospace; font-size: 11px; }
+
+    /* loading */
+    .loading { display: flex; align-items: center; justify-content: center; height: 200px; gap: 12px; color: var(--muted2); font-size: 13px; }
     @keyframes spin { to { transform: rotate(360deg); } }
-    .spinner { width: 18px; height: 18px; border: 2px solid var(--border2); border-top-color: var(--blue); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0; }
-    .candidate { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 18px; margin-bottom: 14px; }
+    .spinner { width: 16px; height: 16px; border: 2px solid var(--border2); border-top-color: var(--green); border-radius: 50%; animation: spin 0.7s linear infinite; flex-shrink: 0; }
+
+    /* candidates */
+    .candidate { background: var(--card); border: 1px solid var(--border); padding: 18px; margin-bottom: 12px; }
     .cand-header { display: flex; align-items: center; gap: 10px; margin-bottom: 14px; }
-    .badge { font-size: 10px; font-weight: 600; letter-spacing: 0.5px; padding: 2px 7px; border-radius: 4px; background: var(--bg3); border: 1px solid var(--border2); color: var(--text2); }
-    .cand-label { font-size: 13px; color: var(--text2); }
-    .tweet-box { font-family: 'SF Mono', 'Fira Code', Monaco, monospace; font-size: 13px; line-height: 1.65; color: var(--text); background: var(--bg); border: 1px solid var(--border2); border-radius: 6px; padding: 12px; width: 100%; resize: vertical; min-height: 72px; }
+    .badge { font-size: 10px; font-weight: 700; letter-spacing: .08em; padding: 3px 8px; background: transparent; border: 1px solid var(--border2); color: var(--muted); font-family: 'JetBrains Mono', monospace; }
+    .cand-label { font-size: 13px; color: var(--muted2); flex: 1; }
+    .regen-btn { padding: 3px 9px; background: transparent; color: var(--muted); border: 1px solid var(--border2); font-size: 11px; cursor: pointer; transition: all 0.15s; flex-shrink: 0; font-family: 'DM Sans', sans-serif; }
+    .regen-btn:hover { color: var(--white); border-color: #444; }
+
+    /* tweet editor */
+    .tweet-box { font-family: 'JetBrains Mono', monospace; font-size: 13px; line-height: 1.7; color: var(--white); background: var(--bg); border: 1px solid var(--border2); padding: 13px; width: 100%; resize: vertical; min-height: 76px; }
     .tweet-box:focus { outline: none; border-color: #383838; }
-    .tweet-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; }
-    .char-ok { color: var(--green); font-size: 12px; }
-    .char-warn { color: var(--yellow); font-size: 12px; }
-    .char-over { color: var(--red); font-size: 12px; }
-    .post-btn { padding: 6px 14px; background: #000; color: var(--text); border: 1px solid var(--border2); border-radius: 5px; font-size: 12px; font-weight: 500; cursor: pointer; transition: border-color 0.15s; }
-    .post-btn:hover { border-color: #555; }
-    .thread-tweet { margin-bottom: 12px; }
-    .thread-num { font-size: 11px; color: var(--text3); margin-bottom: 4px; }
-    .msg-box { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; font-size: 14px; line-height: 1.6; color: var(--text2); }
-    .error-box { background: #1a0a0a; border: 1px solid #3a1515; border-radius: 8px; padding: 16px; font-size: 13px; color: #e57373; }
+    .tweet-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; gap: 8px; }
+    .footer-left { display: flex; align-items: center; gap: 8px; }
+    .char-ok { color: var(--green); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .char-warn { color: var(--yellow); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .char-over { color: var(--red); font-size: 11px; font-family: 'JetBrains Mono', monospace; }
+    .copy-btn { padding: 4px 10px; background: transparent; color: var(--muted); border: 1px solid var(--border2); font-size: 11px; cursor: pointer; transition: all 0.15s; font-family: 'DM Sans', sans-serif; }
+    .copy-btn:hover { color: var(--white); border-color: #444; }
+    .post-btn { padding: 6px 16px; background: var(--green); color: #000; border: none; font-size: 12px; font-weight: 700; cursor: pointer; transition: opacity 0.15s; flex-shrink: 0; font-family: 'DM Sans', sans-serif; letter-spacing: .02em; text-transform: uppercase; }
+    .post-btn:hover { opacity: .85; }
+    .post-btn:disabled { opacity: .4; cursor: not-allowed; }
+    .thread-tweet { margin-bottom: 14px; }
+    .thread-num { font-size: 10px; color: var(--muted); margin-bottom: 5px; font-family: 'JetBrains Mono', monospace; letter-spacing: .05em; }
+
+    /* misc */
+    .msg-box { background: var(--card); border: 1px solid var(--border); padding: 20px; font-size: 14px; line-height: 1.6; color: var(--muted2); }
+    .error-box { background: #120808; border: 1px solid #3a1515; padding: 16px; font-size: 13px; color: var(--red); }
   </style>
 </head>
 <body>
   <header>
-    <div class="logo">devlog<em> ✦</em></div>
+    <div class="logo">postmaxx<span>_</span></div>
     <div id="session-info"></div>
   </header>
   <div class="layout">
@@ -253,7 +351,11 @@ const HTML_APP = `<!DOCTYPE html>
           <span>Candidates</span>
           <input class="count-input" id="count" type="number" min="1" max="10" value="3">
         </div>
-        <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>Generate</button>
+        <div>
+          <div class="ctx-label">About you</div>
+          <textarea class="ctx-area" id="context" placeholder="solo founder, building X, prev Y eng…"></textarea>
+        </div>
+        <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>Generate →</button>
       </div>
       <div class="session-list" id="session-list">
         <div class="s-meta" style="padding:14px">Loading…</div>
@@ -261,20 +363,40 @@ const HTML_APP = `<!DOCTYPE html>
     </aside>
     <main class="main" id="main">
       <div class="empty-state">
-        <div class="empty-icon">✦</div>
-        <div>Select a session and hit Generate</div>
+        <div class="empty-logo">POSTMAXX</div>
+        <div class="empty-steps">
+          <span>01</span> Pick a session from the left<br>
+          <span>02</span> Add context about yourself<br>
+          <span>03</span> Hit Generate
+        </div>
       </div>
     </main>
   </div>
   <script>
-    var selected = null, mode = 'story';
+    var selected = null, mode = 'story', lastExtraction = null;
+
+    // persist context across refreshes
+    var ctxEl = document.getElementById('context');
+    ctxEl.value = localStorage.getItem('pmx_context') || '';
+    ctxEl.addEventListener('input', function(){ localStorage.setItem('pmx_context', ctxEl.value); });
+
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function charHtml(text) {
       var n = (text||'').length, cls = n<=260?'char-ok':n<=280?'char-warn':'char-over', icon = n<=260?'✓':n<=280?'⚠':'✗';
       return '<span class="'+cls+'">'+icon+' '+n+'/280</span>';
     }
     function updateChar(el, cid) { document.getElementById(cid).innerHTML = charHtml(el.value); }
+
+    function copyText(tid, btnEl) {
+      var val = document.getElementById(tid).value;
+      navigator.clipboard.writeText(val).then(function(){
+        var orig = btnEl.textContent; btnEl.textContent = 'Copied!'; btnEl.style.color = 'var(--green)';
+        setTimeout(function(){ btnEl.textContent = orig; btnEl.style.color = ''; }, 1500);
+      });
+    }
+
     function postToX(tid) { window.open('https://x.com/intent/tweet?text='+encodeURIComponent(document.getElementById(tid).value),'_blank'); }
+
     async function postThread(i, count) {
       var tweets = [];
       for (var j=0; j<count; j++) { var el=document.getElementById('tw'+i+'_'+j); if(el) tweets.push(el.value); }
@@ -287,24 +409,52 @@ const HTML_APP = `<!DOCTYPE html>
         else { btn.textContent='Posted ✓'; btn.style.borderColor='#4caf50'; }
       } catch(e) { alert('Failed: '+e.message); btn.disabled=false; btn.textContent='Post thread →'; }
     }
+
+    async function regenCandidate(i) {
+      if (!selected) return;
+      var el = document.getElementById('cand'+i);
+      if (!el) return;
+      el.style.opacity = '0.4';
+      var ctx = document.getElementById('context').value.trim();
+      try {
+        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:1,context:ctx})});
+        var data = await res.json();
+        if (data.error || !data.candidates || !data.candidates.length) { el.style.opacity='1'; return; }
+        var newHtml = buildCandidateHtml(data.candidates[0], i);
+        el.outerHTML = newHtml;
+      } catch(e) { el.style.opacity='1'; }
+    }
+
     function setMode(m) {
       mode = m;
       document.getElementById('btn-story').classList.toggle('active', m==='story');
       document.getElementById('btn-technical').classList.toggle('active', m==='technical');
     }
-    function pick(i) {
+
+    async function pick(i) {
       document.querySelectorAll('.session-item').forEach(function(el){el.classList.remove('selected');});
       document.getElementById('si'+i).classList.add('selected');
       selected = window.__sessions[i];
       document.getElementById('session-info').textContent = selected.project+' · '+selected.age;
       document.getElementById('gen-btn').disabled = false;
+      // show session preview
+      var main = document.getElementById('main');
+      main.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading preview…</span></div>';
+      try {
+        var res = await fetch('/api/preview?file='+encodeURIComponent(selected.file));
+        var data = await res.json();
+        if (data.preview) {
+          main.innerHTML = '<div class="preview-card"><div class="preview-title">Session preview</div><div class="preview-text">'+esc(data.preview)+'</div></div>'+
+            '<div class="preview-hint">Hit Generate → when ready</div>';
+        } else { main.innerHTML = '<div class="empty-state"><div class="empty-icon">✦</div><div>Hit Generate</div></div>'; }
+      } catch(e) { main.innerHTML = '<div class="empty-state"><div class="empty-icon">✦</div><div>Hit Generate</div></div>'; }
     }
+
     async function init() {
       try {
         var res = await fetch('/api/sessions'), sessions = await res.json();
         var list = document.getElementById('session-list');
-        if (!sessions.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions. Run with --days 30.</div>'; return; }
-        // sort: by day desc, then by size desc within each day
+        if (!sessions.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions found.</div>'; return; }
         sessions.sort(function(a,b){
           var da=a.mtime.slice(0,10), db=b.mtime.slice(0,10);
           if (da!==db) return da>db?-1:1;
@@ -316,7 +466,7 @@ const HTML_APP = `<!DOCTYPE html>
           var day=s.mtime.slice(0,10);
           if (day!==lastDay) {
             var label=formatDay(day);
-            html+='<div style="padding:8px 14px 4px;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;border-top:'+(lastDay?'1px solid var(--border2)':'none')+'">'+esc(label)+'</div>';
+            html+='<div class="day-header">'+esc(label)+'</div>';
             lastDay=day;
           }
           html+='<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+esc(s.age)+' · '+s.sizeKb+'kb</div>'+'</div>';
@@ -331,44 +481,60 @@ const HTML_APP = `<!DOCTYPE html>
         }
       } catch(e) { document.getElementById('session-list').innerHTML='<div class="s-meta" style="padding:14px;color:#e57373">Failed to load sessions</div>'; }
     }
+
     async function generate() {
       if (!selected) return;
       var count = parseInt(document.getElementById('count').value)||3;
+      var ctx = document.getElementById('context').value.trim();
       var main = document.getElementById('main');
       main.innerHTML = '<div class="loading"><div class="spinner"></div><span>Extracting reasoning…</span></div>';
       document.getElementById('gen-btn').disabled = true;
       try {
-        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:count})});
+        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:count,context:ctx})});
         var data = await res.json();
         if (data.error) { main.innerHTML='<div class="error-box">Error: '+esc(data.error)+'</div>'; }
         else if (data.nothing||data.gateError) { main.innerHTML='<div class="msg-box">'+esc(data.message||data.gateError||'Nothing to share.')+'</div>'; }
-        else { renderCandidates(data.candidates||[]); }
+        else { renderCandidates(data.candidates||[], data.extraction); }
       } catch(e) { main.innerHTML='<div class="error-box">Request failed: '+esc(e.message)+'</div>'; }
       finally { document.getElementById('gen-btn').disabled=false; }
     }
-    function renderCandidates(candidates) {
+
+    function buildCandidateHtml(c, i) {
+      var badge = (c.shape||'single').toUpperCase()+' · '+(c.type||'story').toUpperCase(), label = esc(c.label||'');
+      var header = '<div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span>'+
+        '<button class="regen-btn" onclick="regenCandidate('+i+')">↻ redo</button></div>';
+      if (c.shape==='thread') {
+        var tweets = c.tweets||[];
+        var threadHtml = tweets.map(function(t,j){
+          var tid='tw'+i+'_'+j, cid='cc'+i+'_'+j;
+          return '<div class="thread-tweet"><div class="thread-num">'+(j+1)+'/'+tweets.length+'</div>'+
+            '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(t||'')+'</textarea>'+
+            '<div class="tweet-footer"><div class="footer-left"><span id="'+cid+'">'+charHtml(t||'')+'</span>'+
+            '<button class="copy-btn" onclick="copyText(\\x27'+tid+'\\x27,this)">Copy</button></div></div></div>';
+        }).join('');
+        return '<div class="candidate" id="cand'+i+'">'+header+'<div>'+threadHtml+
+          '<div class="tweet-footer" style="margin-top:4px"><span></span>'+
+          '<button class="post-btn" id="ptbtn'+i+'" onclick="postThread('+i+','+tweets.length+')">Post thread →</button></div>'+
+          '</div></div>';
+      }
+      var text=c.text||'', tid='tw'+i, cid='cc'+i;
+      return '<div class="candidate" id="cand'+i+'">'+header+
+        '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(text)+'</textarea>'+
+        '<div class="tweet-footer"><div class="footer-left"><span id="'+cid+'">'+charHtml(text)+'</span>'+
+        '<button class="copy-btn" onclick="copyText(\\x27'+tid+'\\x27,this)">Copy</button></div>'+
+        '<button class="post-btn" onclick="postToX(\\x27'+tid+'\\x27)">Post to X →</button></div></div>';
+    }
+
+    function renderCandidates(candidates, extraction) {
       var main = document.getElementById('main');
       if (!candidates.length) { main.innerHTML='<div class="msg-box">No candidates returned.</div>'; return; }
-      main.innerHTML = candidates.map(function(c,i){
-        var badge = (c.shape||'single').toUpperCase()+' · '+(c.type||'story').toUpperCase(), label = esc(c.label||'');
-        if (c.shape==='thread') {
-          var tweets = c.tweets||[];
-          return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div><div>'+
-            tweets.map(function(t,j){ var tid='tw'+i+'_'+j, cid='cc'+i+'_'+j;
-              return '<div class="thread-tweet"><div class="thread-num">'+(j+1)+'/'+tweets.length+'</div>'+
-                '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(t||'')+'</textarea>'+
-                '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(t||'')+'</span></div></div>';
-            }).join('')+
-            '<div class="tweet-footer" style="margin-top:4px"><span></span>'+
-            '<button class="post-btn" id="ptbtn'+i+'" onclick="postThread('+i+','+tweets.length+')">Post thread →</button></div>'+
-            '</div></div>';
-        }
-        var text=c.text||'', tid='tw'+i, cid='cc'+i;
-        return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div>'+
-          '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(text)+'</textarea>'+
-          '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(text)+'</span>'+
-          '<button class="post-btn" onclick="postToX(\\x27'+tid+'\\x27)">Post to X →</button></div></div>';
-      }).join('');
+      var signalHtml = '';
+      if (extraction) {
+        var good = extraction.has_reasoning && extraction.decisions && extraction.decisions.length > 0;
+        signalHtml = '<div class="signal-bar"><div class="signal-dot '+(good?'signal-good':'signal-weak')+'"></div>'+
+          '<span class="signal-text">'+(good ? extraction.decisions.length+' decision'+(extraction.decisions.length>1?'s':'')+' found' : 'Low signal session — posts may be thin')+'</span></div>';
+      }
+      main.innerHTML = signalHtml + candidates.map(function(c,i){ return buildCandidateHtml(c,i); }).join('');
     }
     init();
   </script>
@@ -399,7 +565,7 @@ async function handlePostGenerate(req, res) {
     return;
   }
 
-  const { sessionFile, mode, count } = params;
+  const { sessionFile, mode, count, context } = params;
   if (!sessionFile) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'sessionFile is required' }));
@@ -409,6 +575,7 @@ async function handlePostGenerate(req, res) {
   try {
     const result = await runPipeline(sessionFile, mode || 'story', count || 3, {
       apiKey: ANTHROPIC_KEY,
+      context: context || '',
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result));
@@ -434,6 +601,25 @@ async function handleRequest(req, res) {
 
   if (req.method === 'POST' && urlPath === '/api/generate') {
     await handlePostGenerate(req, res);
+    return;
+  }
+
+  if (req.method === 'GET' && urlPath === '/api/preview') {
+    const file = new URL('http://x' + req.url).searchParams.get('file');
+    if (!file || !fs.existsSync(file)) {
+      res.writeHead(404, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: 'not found' }));
+      return;
+    }
+    try {
+      const messages = parseSession(file);
+      const userMsgs = messages.filter(m => m.role === 'user').slice(0, 3).map(m => m.content.slice(0, 300));
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ preview: userMsgs.join('\n\n') }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
 
@@ -521,21 +707,25 @@ function buildStoryPrompt(extraction, state, opts) {
     ? `\nThis person's real posts for tone reference:\n---\n${voiceExamples.slice(0, 2000)}\n---\n`
     : '';
 
-  return `You are ghost-writing building-in-public posts. Lens: STORY — surface the product or business reasoning behind decisions. Who made a choice, why they made it, and what it means.
+  return `You are writing X posts for a founder/builder. Lens: STORY — the human reasoning behind a decision. Not what they built, but why they made the call they made, what they got wrong, what surprised them.
 
-Extraction (ground truth — every claim must trace here):
+Extraction (ground truth — every claim must trace here, invent nothing):
 ${formatExtraction(extraction)}
 
-Recent posts (so you can write continuations and avoid repetition):
+Recent posts (avoid repeating these angles):
 ${formatRecentPosts(state)}
 ${voiceBlock}
 ${VOICE_RULES}
 
-Generate ${count} candidates. Each candidate picks its own shape:
-- "single" when one tight insight lands in ≤ 280 chars
-- "thread" (3-5 tweets, each ≤ 280) when the reasoning needs space
+${SINGLE_EXAMPLES}
 
-If best_output_type is "drip", keep it short and casual. If "continuation", reference the arc explicitly.
+${THREAD_EXAMPLES}
+
+Generate ${count} candidates with genuinely different angles — not variations of the same framing. Each picks its own shape:
+- "single" when one sharp moment lands in ≤ 280 chars
+- "thread" (3-5 tweets, each ≤ 280) when there's a narrative arc worth following
+
+If best_output_type is "drip", one casual sentence is better than trying to manufacture a story. If "continuation", name the arc explicitly in the first line.
 
 ${OUTPUT_FORMAT}`;
 }
@@ -546,17 +736,21 @@ function buildTechnicalPrompt(extraction, state, opts) {
     ? `\nThis person's real posts for tone reference:\n---\n${voiceExamples.slice(0, 2000)}\n---\n`
     : '';
 
-  return `You are ghost-writing building-in-public posts. Lens: TECHNICAL — surface the engineering decisions, stack choices, patterns, and trade-offs. Audience is developers who want the actual details. Don't dumb it down.
+  return `You are writing X posts for a developer. Lens: TECHNICAL — the actual engineering decision, with real specifics. Audience is developers who will immediately know if you're being vague or hand-wavy. Do not dumb it down, do not editorialize.
 
-Extraction (ground truth — every claim must trace here):
+Extraction (ground truth — every claim must trace here, invent nothing):
 ${formatExtraction(extraction)}
 
-Recent posts (for continuation and avoiding repetition):
+Recent posts (avoid repeating these angles):
 ${formatRecentPosts(state)}
 ${voiceBlock}
 ${VOICE_RULES}
 
-Generate ${count} candidates. Lean into specifics: library names, patterns, constraints, the trade-off accepted. Each candidate picks its own shape:
+${SINGLE_EXAMPLES}
+
+${THREAD_EXAMPLES}
+
+Generate ${count} candidates with genuinely different angles. Use real names: library names, model names, error messages, patterns. The trade-off accepted is more interesting than the solution chosen. Each picks its own shape:
 - "single" for one sharp technical observation (≤ 280 chars)
 - "thread" for a chain of decisions or a non-obvious trade-off explained
 
@@ -994,27 +1188,32 @@ async function runPipeline(sessionFile, mode, count, opts = {}) {
   const slug             = projectSlug(path.basename(path.dirname(sessionFile)));
   const state            = loadState(slug, opts);
   const voiceExamples    = STYLE_FILE ? loadStyle(STYLE_FILE) : null;
-  const sessionForPrompt = CONTEXT ? `Manual context from author: ${CONTEXT}\n\n---\n\n${chunk}` : chunk;
+  const contextHint = opts.context || CONTEXT || '';
+  const sessionForPrompt = contextHint ? `Context about the author: ${contextHint}\n\n---\n\n${chunk}` : chunk;
 
   const extraction = await extractStage1(sessionForPrompt, state, { apiKey, fetchFn: opts.fetchFn });
 
   if (extraction.best_output_type === 'nothing') extraction.best_output_type = 'drip';
 
-  return generateStage2(extraction, state, {
+  const result = await generateStage2(extraction, state, {
     mode: mode || 'story',
     count: count || 3,
     voiceExamples,
     apiKey,
     fetchFn: opts.fetchFn,
   });
+  result.extraction = extraction;
+  return result;
 }
 
 // ─── Main ──────────────────────────────────────────────────────────────────
 
 async function main() {
-  console.log('\n  devlog v1  —  session → reasoning → posts\n');
+  console.log('\n  postmaxx_  —  session → reasoning → posts\n');
 
-  if (!ANTHROPIC_KEY) die('Missing ANTHROPIC_API_KEY in .env');
+  await setupFirstRun();
+  const ANTHROPIC_KEY_LIVE = process.env.ANTHROPIC_API_KEY;
+  if (!ANTHROPIC_KEY_LIVE) die('Missing ANTHROPIC_API_KEY');
 
   process.stdout.write('  Finding sessions...');
   const sessions = findSessions();
@@ -1078,7 +1277,7 @@ async function main() {
 }
 
 if (require.main === module) {
-  if (USE_UI) serveUi().catch(e => die(e.message));
+  if (USE_UI) setupFirstRun().then(() => serveUi()).catch(e => die(e.message));
   else main().catch(e => die(e.message));
 } else {
   module.exports = { projectSlug, loadState, saveState, recordApprovals, passesPreGate, buildExtractionPrompt, extractStage1, buildStoryPrompt, buildTechnicalPrompt, generateStage2, buildNoteContent, exportToNotes, runPipeline, serveUi };

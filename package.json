@@ -1,0 +1,21 @@
+{
+  "name": "postmaxxing",
+  "version": "1.0.0",
+  "description": "Turn your Claude Code sessions into building-in-public posts",
+  "bin": {
+    "postmaxxing": "./devlog.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "keywords": ["claude", "twitter", "x", "building-in-public", "devlog"],
+  "author": "Myron Shneider",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/myrondoesnotcode/postmaxxing"
+  },
+  "files": [
+    "devlog.js"
+  ]
+}
