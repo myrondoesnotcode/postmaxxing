@@ -839,11 +839,13 @@
 
       /* comparison: hide annotations, stack vertically */
       .comp-labels {
-        grid-template-columns: 1fr 1fr;
+        grid-template-columns: 1fr;
         padding: 0;
-        gap: 12px;
+        gap: 8px;
       }
       .comp-labels > div:nth-child(2) { display: none; }
+      .comp-label-text.bad { text-align: left; }
+      .comp-label-text.good { text-align: left; }
 
       .comp-row {
         grid-template-columns: 1fr;
