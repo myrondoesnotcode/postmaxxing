@@ -2,219 +2,1264 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>postmaxxing — turn your Claude Code sessions into posts worth reading</title>
-  <meta name="description" content="Postmaxxing reads your Claude Code sessions, finds the reasoning behind your decisions, and writes the tweet. You hit Post.">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>postmaxx_ — It's Time To Postmaxx</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Bebas+Neue&family=DM+Sans:ital,opsz,wght@0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;1,9..40,400;1,9..40,500&family=Caveat:wght@400;600;700&family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-    :root { --bg: #0d0d0d; --bg2: #141414; --border: #222; --text: #e8e8e8; --text2: #888; --text3: #555; --blue: #1d6bf3; }
-    body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: var(--bg); color: var(--text); line-height: 1.6; }
-    a { color: var(--blue); text-decoration: none; }
-    a:hover { text-decoration: underline; }
 
-    nav { padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-    .nav-logo { font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
-    .nav-right { display: flex; align-items: center; gap: 24px; }
-    .nav-link { font-size: 14px; color: var(--text2); }
-    .nav-cta { font-size: 13px; font-weight: 600; background: var(--blue); color: #fff; padding: 7px 16px; border-radius: 6px; }
-    .nav-cta:hover { text-decoration: none; opacity: 0.9; }
+    :root {
+      --bg: #0a0a0a;
+      --green: #CDFF00;
+      --white: #F0EFE8;
+      --card: #111;
+      --card2: #141414;
+      --border: #222;
+      --muted: #666;
+      --muted2: #999;
+      --pink: #FF6B6B;
+    }
 
-    .hero { max-width: 720px; margin: 0 auto; padding: 80px 40px 60px; text-align: center; }
-    .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 700; letter-spacing: -1px; line-height: 1.15; margin-bottom: 20px; }
-    .hero h1 em { color: var(--text3); font-style: normal; }
-    .hero p { font-size: 18px; color: var(--text2); max-width: 520px; margin: 0 auto 40px; }
+    html { scroll-behavior: smooth; }
 
-    .cta-group { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 48px; }
-    .btn-primary { display: inline-flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; font-size: 15px; font-weight: 600; padding: 12px 28px; border-radius: 8px; text-decoration: none; }
-    .btn-primary:hover { text-decoration: none; opacity: 0.9; }
-    .btn-secondary { font-size: 14px; color: var(--text2); }
-    .btn-secondary:hover { color: var(--text); text-decoration: none; }
-    .api-note { font-size: 12px; color: var(--text3); }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: var(--bg);
+      color: var(--white);
+      line-height: 1.5;
+      overflow-x: hidden;
+    }
 
-    .install { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 24px; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; display: inline-block; }
-    .install span { color: var(--text3); }
-    .sub-install { font-size: 12px; color: var(--text3); margin-top: 8px; }
+    a { text-decoration: none; color: inherit; }
 
-    .screenshot { max-width: 900px; margin: 0 auto 80px; padding: 0 40px; }
-    .screen-frame { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
-    .screen-bar { height: 36px; background: #111; border-bottom: 1px solid var(--border); display: flex; align-items: center; padding: 0 14px; gap: 7px; }
-    .dot { width: 11px; height: 11px; border-radius: 50%; }
-    .dot-r { background: #ff5f57; } .dot-y { background: #febc2e; } .dot-g { background: #28c840; }
-    .screen-body { display: flex; height: 400px; }
-    .screen-sidebar { width: 220px; border-right: 1px solid var(--border); padding: 14px; flex-shrink: 0; }
-    .screen-main { flex: 1; padding: 20px; }
-    .fake-item { padding: 8px 10px; border-radius: 5px; margin-bottom: 4px; font-size: 12px; }
-    .fake-item.sel { background: rgba(29,107,243,0.1); border-left: 2px solid #1d6bf3; }
-    .fake-item .p { font-weight: 600; color: var(--text); }
-    .fake-item .m { color: var(--text3); font-size: 11px; }
-    .fake-card { background: #111; border: 1px solid var(--border); border-radius: 6px; padding: 14px; margin-bottom: 12px; }
-    .fake-badge { font-size: 10px; font-weight: 600; padding: 2px 6px; border-radius: 3px; background: #1a1a1a; border: 1px solid #2a2a2a; color: #888; display: inline-block; margin-bottom: 10px; }
-    .fake-tweet { font-family: monospace; font-size: 12px; color: var(--text); line-height: 1.6; margin-bottom: 10px; }
-    .fake-footer { display: flex; justify-content: space-between; align-items: center; }
-    .fake-count { font-size: 11px; color: #4caf50; }
-    .fake-btn { font-size: 11px; padding: 4px 10px; background: #000; border: 1px solid #333; border-radius: 4px; color: var(--text); }
+    /* ─── NAV ─── */
+    nav {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 18px 40px;
+      position: sticky;
+      top: 0;
+      background: var(--bg);
+      z-index: 100;
+      border-bottom: 1px solid var(--border);
+    }
 
-    .examples { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
-    .examples h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; text-align: center; }
-    .examples-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 36px; }
-    .example-tweet { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px; margin-bottom: 14px; font-size: 14px; line-height: 1.7; }
-    .example-tweet .label { font-size: 11px; color: var(--text3); margin-bottom: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+    .logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: -0.5px;
+    }
 
-    .how { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
-    .how h2 { font-size: 24px; font-weight: 600; margin-bottom: 36px; text-align: center; }
-    .steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
-    .step { text-align: center; }
-    .step-num { width: 36px; height: 36px; border-radius: 50%; background: var(--bg2); border: 1px solid var(--border); display: flex; align-items: center; justify-content: center; font-size: 13px; font-weight: 600; margin: 0 auto 12px; }
-    .step h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
-    .step p { font-size: 13px; color: var(--text2); }
+    .nav-right { display: flex; align-items: center; gap: 20px; }
 
-    .setup { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
-    .setup h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; text-align: center; }
-    .setup-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 36px; }
-    .setup-steps { display: flex; flex-direction: column; gap: 16px; }
-    .setup-step { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; display: flex; gap: 20px; align-items: flex-start; }
-    .setup-n { font-size: 11px; font-weight: 700; color: var(--blue); letter-spacing: 0.5px; flex-shrink: 0; padding-top: 2px; }
-    .setup-text h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
-    .setup-text p { font-size: 13px; color: var(--text2); }
-    .setup-text code { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; background: #111; border: 1px solid var(--border); padding: 2px 6px; border-radius: 3px; color: var(--text); }
+    .nav-gh {
+      font-size: 13px;
+      color: var(--muted2);
+      transition: color .2s;
+    }
+    .nav-gh:hover { color: var(--white); }
 
-    .meta { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; text-align: center; }
-    .meta p { font-size: 14px; color: var(--text2); margin-bottom: 8px; }
+    .btn-green {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 700;
+      background: var(--green);
+      color: #000;
+      padding: 9px 20px;
+      border-radius: 8px;
+      letter-spacing: -0.2px;
+      transition: opacity .2s;
+    }
+    .btn-green:hover { opacity: .87; }
 
-    footer { border-top: 1px solid var(--border); padding: 24px 40px; text-align: center; font-size: 13px; color: var(--text3); }
+    /* ─── HERO ─── */
+    .hero {
+      padding: 52px 40px 0;
+      display: grid;
+      grid-template-columns: 1fr 280px;
+      gap: 40px;
+      max-width: 1100px;
+      margin: 0 auto;
+      position: relative;
+    }
 
+    .hero-left { position: relative; }
+
+    .sparks {
+      position: absolute;
+      top: -8px;
+      left: -8px;
+      pointer-events: none;
+    }
+
+    .spark {
+      position: absolute;
+      font-size: 22px;
+      color: var(--green);
+      font-weight: 900;
+      line-height: 1;
+      user-select: none;
+    }
+
+    .hero-headline {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(80px, 12vw, 148px);
+      line-height: 0.92;
+      letter-spacing: 2px;
+      margin-bottom: 20px;
+      filter: url(#roughen);
+    }
+
+    .headline-white { color: var(--white); display: block; }
+    .headline-green { color: var(--green); display: block; }
+
+    .hero-tagline {
+      font-size: 17px;
+      font-weight: 600;
+      margin-bottom: 10px;
+      letter-spacing: -0.2px;
+    }
+
+    .hero-tagline .green { color: var(--green); }
+
+    .hero-sub {
+      font-size: 15px;
+      color: var(--muted2);
+      max-width: 380px;
+      margin-bottom: 28px;
+      line-height: 1.55;
+    }
+
+    .hero-sub u {
+      text-decoration-color: var(--white);
+      text-underline-offset: 3px;
+      color: var(--white);
+    }
+
+    .hero-ctas {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 16px;
+    }
+
+    .btn-green-lg {
+      display: inline-flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 15px;
+      font-weight: 700;
+      background: var(--green);
+      color: #000;
+      padding: 12px 24px;
+      border-radius: 9px;
+      transition: opacity .2s;
+    }
+    .btn-green-lg:hover { opacity: .87; }
+
+    .btn-ghost {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--white);
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      text-decoration-color: var(--muted);
+    }
+    .btn-ghost:hover { text-decoration-color: var(--white); }
+
+    .hero-meta {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .hero-meta a { color: var(--muted); text-decoration: underline; text-underline-offset: 2px; }
+
+    /* ─── CALLOUT BOX ─── */
+    .hero-right {
+      padding-top: 8px;
+      display: flex;
+      align-items: flex-start;
+      justify-content: flex-end;
+    }
+
+    .callout-box {
+      border: 2px solid rgba(255,255,255,0.25);
+      border-radius: 4px;
+      padding: 20px 22px;
+      max-width: 240px;
+      transform: rotate(1.5deg);
+      position: relative;
+    }
+
+    .callout-box::before {
+      content: '';
+      position: absolute;
+      inset: 3px;
+      border: 1px solid rgba(255,255,255,0.08);
+      border-radius: 2px;
+      pointer-events: none;
+    }
+
+    .callout-icon {
+      font-size: 28px;
+      margin-bottom: 10px;
+    }
+
+    .callout-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 32px;
+      line-height: 1.0;
+      letter-spacing: 1px;
+    }
+
+    .callout-text .green { color: var(--green); }
+
+    /* ─── COMPARISON ─── */
+    .comparison-section {
+      max-width: 1100px;
+      margin: 48px auto 0;
+      padding: 0 40px 60px;
+      position: relative;
+    }
+
+    .comp-labels {
+      display: grid;
+      grid-template-columns: 1fr 80px 1fr;
+      gap: 20px;
+      margin-bottom: 10px;
+      padding: 0 100px;
+    }
+
+    .comp-label-text {
+      font-family: 'Caveat', cursive;
+      font-size: 22px;
+      font-weight: 600;
+    }
+
+    .comp-label-text.bad {
+      color: var(--pink);
+      text-align: center;
+    }
+
+    .comp-label-text.good {
+      color: var(--green);
+      text-align: center;
+    }
+
+    .comp-label-text.bad::after {
+      content: '';
+      display: block;
+      height: 2px;
+      background: var(--pink);
+      margin-top: 2px;
+      border-radius: 2px;
+    }
+
+    .comp-label-text.good::after {
+      content: '';
+      display: block;
+      height: 2px;
+      background: var(--green);
+      margin-top: 2px;
+      border-radius: 2px;
+    }
+
+    .comp-row {
+      display: grid;
+      grid-template-columns: 90px 1fr 80px 1fr 90px;
+      gap: 0;
+      align-items: center;
+    }
+
+    .ann {
+      font-family: 'Caveat', cursive;
+      font-size: 16px;
+      color: var(--muted2);
+      line-height: 1.35;
+      text-align: center;
+    }
+
+    .ann-arrow {
+      font-size: 20px;
+      display: block;
+    }
+
+    .comp-arrow-center {
+      text-align: center;
+    }
+
+    .big-arrow {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 56px;
+      color: var(--green);
+      line-height: 1;
+    }
+
+    /* ─── TWEET CARD ─── */
+    .tweet {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+
+    .tweet-head {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 12px;
+    }
+
+    .avi {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background: #2a2a2a;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      flex-shrink: 0;
+      overflow: hidden;
+    }
+
+    .tweet-name {
+      font-size: 14px;
+      font-weight: 700;
+      line-height: 1.2;
+    }
+
+    .tweet-handle {
+      font-size: 13px;
+      color: var(--muted2);
+    }
+
+    .tweet-body {
+      font-size: 14px;
+      line-height: 1.6;
+      color: #ccc;
+      margin-bottom: 14px;
+    }
+
+    .tweet-stats {
+      display: flex;
+      gap: 18px;
+      font-size: 13px;
+      color: var(--muted);
+      border-top: 1px solid var(--border);
+      padding-top: 10px;
+    }
+
+    .stat { display: flex; align-items: center; gap: 4px; }
+    .stat-red { color: #e0245e; }
+
+    /* ─── COMP BOTTOM LABELS ─── */
+    .comp-bottom {
+      display: grid;
+      grid-template-columns: 90px 1fr 80px 1fr 90px;
+      gap: 0;
+      margin-top: 10px;
+    }
+
+    .bottom-ann {
+      font-family: 'Caveat', cursive;
+      font-size: 18px;
+      font-weight: 600;
+      text-align: center;
+    }
+
+    .bottom-ann.bad {
+      color: var(--pink);
+      text-decoration: underline;
+      text-decoration-color: var(--pink);
+      text-underline-offset: 3px;
+    }
+
+    .bottom-ann.good {
+      color: var(--green);
+      text-decoration: underline;
+      text-decoration-color: var(--green);
+      text-underline-offset: 3px;
+    }
+
+    /* ─── SIGNAL SECTION ─── */
+    .signal-section {
+      border-top: 1px solid var(--border);
+      padding: 64px 40px;
+    }
+
+    .signal-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 60px;
+      align-items: start;
+    }
+
+    .signal-left {}
+
+    .signal-headline {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(44px, 5.5vw, 68px);
+      line-height: 1.0;
+      letter-spacing: 1px;
+      margin-bottom: 20px;
+    }
+
+    .signal-headline .green { color: var(--green); }
+
+    .signal-sub {
+      font-size: 14px;
+      color: var(--muted2);
+      line-height: 1.6;
+      max-width: 280px;
+    }
+
+    .signal-sub u {
+      color: var(--white);
+      text-underline-offset: 3px;
+      text-decoration-color: rgba(255,255,255,0.5);
+    }
+
+    .signal-right {}
+
+    .signal-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 16px;
+    }
+
+    .ex-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .ex-tag {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 10px;
+      font-weight: 700;
+      letter-spacing: 1.5px;
+      color: var(--green);
+      margin-bottom: 12px;
+      text-transform: uppercase;
+    }
+
+    .ex-icon {
+      font-size: 14px;
+      line-height: 1;
+    }
+
+    .ex-body {
+      font-size: 13px;
+      line-height: 1.6;
+      color: #ccc;
+      flex: 1;
+      margin-bottom: 16px;
+    }
+
+    .ex-footer {
+      font-size: 11px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    /* ─── HOW IT WORKS ─── */
+    .howto-section {
+      border-top: 1px solid var(--border);
+      padding: 64px 40px;
+    }
+
+    .howto-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .howto-header {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(28px, 3.5vw, 42px);
+      letter-spacing: 1px;
+      margin-bottom: 40px;
+    }
+
+    .howto-header .green { color: var(--green); }
+
+    .steps {
+      display: grid;
+      grid-template-columns: 1fr auto 1fr auto 1fr;
+      gap: 20px;
+      align-items: center;
+    }
+
+    .step {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+    }
+
+    .step-top {
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      margin-bottom: 14px;
+    }
+
+    .step-num {
+      width: 30px;
+      height: 30px;
+      border-radius: 50%;
+      background: var(--green);
+      color: #000;
+      font-weight: 800;
+      font-size: 14px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+    }
+
+    .step-icon-box {
+      width: 38px;
+      height: 38px;
+      background: #1a1a1a;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+    }
+
+    .step-title {
+      font-size: 15px;
+      font-weight: 700;
+      margin-bottom: 6px;
+      letter-spacing: -0.2px;
+    }
+
+    .step-desc {
+      font-size: 13px;
+      color: var(--muted2);
+      line-height: 1.55;
+    }
+
+    .step-arrow {
+      font-size: 28px;
+      color: var(--muted);
+      text-align: center;
+    }
+
+    /* ─── CTA BANNER ─── */
+    .banner {
+      background: #111;
+      border-top: 1px solid var(--border);
+      border-bottom: 1px solid var(--border);
+      padding: 48px 40px;
+    }
+
+    .banner-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 32px;
+    }
+
+    .banner-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(28px, 3.8vw, 48px);
+      line-height: 1.05;
+      letter-spacing: 1px;
+    }
+
+    .banner-text .green { color: var(--green); }
+
+    .fix-that {
+      font-family: 'Caveat', cursive;
+      font-size: 36px;
+      font-weight: 700;
+      color: var(--green);
+      transform: rotate(-4deg);
+      display: block;
+      white-space: nowrap;
+      flex-shrink: 0;
+      margin-right: 20px;
+    }
+
+    /* ─── REAL OUTPUT ─── */
+    .output-section {
+      padding: 64px 40px;
+    }
+
+    .output-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+    }
+
+    .output-header {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+      margin-bottom: 32px;
+    }
+
+    .output-title {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(28px, 3.5vw, 40px);
+      letter-spacing: 1px;
+    }
+
+    .output-sub {
+      font-size: 13px;
+      color: var(--muted);
+      font-style: italic;
+    }
+
+    .output-cards {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 20px;
+    }
+
+    .out-card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 16px 18px;
+    }
+
+    .out-type {
+      font-size: 11px;
+      color: var(--muted);
+      margin-bottom: 14px;
+      letter-spacing: 0.3px;
+    }
+
+    /* ─── BOTTOM CTA ─── */
+    .bottom-section {
+      border-top: 1px solid var(--border);
+      padding: 56px 40px;
+    }
+
+    .bottom-inner {
+      max-width: 1100px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 200px 1fr 200px;
+      gap: 40px;
+      align-items: center;
+    }
+
+    .you-build-box {
+      border: 2px solid rgba(255,255,255,0.2);
+      border-radius: 4px;
+      padding: 20px;
+      text-align: center;
+      transform: rotate(-1.5deg);
+    }
+
+    .you-build-text {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: 24px;
+      line-height: 1.15;
+      letter-spacing: 0.5px;
+    }
+
+    .you-build-heart {
+      color: var(--pink);
+      font-size: 20px;
+      margin-top: 6px;
+    }
+
+    .bottom-center { text-align: center; }
+
+    .stop-posting {
+      font-family: 'Bebas Neue', sans-serif;
+      font-size: clamp(44px, 6vw, 76px);
+      letter-spacing: 2px;
+      line-height: 1.0;
+      margin-bottom: 10px;
+    }
+
+    .stop-posting .green { color: var(--green); }
+
+    .stop-sub {
+      font-size: 14px;
+      color: var(--muted2);
+      margin-bottom: 24px;
+    }
+
+    .bottom-ctas {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 16px;
+    }
+
+    .crown-box {
+      text-align: center;
+    }
+
+    .crown-icon {
+      font-size: 40px;
+      margin-bottom: 10px;
+      display: block;
+    }
+
+    .crown-text {
+      font-family: 'Caveat', cursive;
+      font-size: 20px;
+      color: var(--green);
+      font-weight: 600;
+      line-height: 1.3;
+    }
+
+    /* ─── FOOTER ─── */
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 24px 40px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .footer-left {
+      display: flex;
+      align-items: baseline;
+      gap: 16px;
+    }
+
+    .footer-logo {
+      font-family: 'JetBrains Mono', monospace;
+      font-size: 15px;
+      font-weight: 700;
+    }
+
+    .footer-open {
+      font-size: 12px;
+      color: var(--muted);
+    }
+
+    .footer-right {
+      display: flex;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .footer-link {
+      font-size: 13px;
+      color: var(--muted2);
+      transition: color .2s;
+    }
+    .footer-link:hover { color: var(--white); }
+
+    /* ─── GITHUB ICON ─── */
+    .gh-icon {
+      width: 16px;
+      height: 16px;
+      fill: currentColor;
+    }
+
+    /* ─── RESPONSIVE ─── */
+
+    /* Tablet (≤900px) */
+    @media (max-width: 900px) {
+      nav { padding: 16px 24px; }
+
+      .hero {
+        grid-template-columns: 1fr;
+        padding: 40px 24px 0;
+        gap: 32px;
+      }
+
+      .hero-right { justify-content: flex-start; }
+      .callout-box { max-width: 260px; }
+
+      .comparison-section { padding: 0 24px 48px; }
+
+      .comp-labels { padding: 0 70px; }
+
+      .signal-inner { grid-template-columns: 1fr; gap: 40px; }
+
+      .signal-cards { grid-template-columns: 1fr 1fr; }
+
+      .steps {
+        grid-template-columns: 1fr;
+        gap: 0;
+      }
+      .step-arrow { transform: rotate(90deg); text-align: center; padding: 8px 0; }
+
+      .output-cards { grid-template-columns: 1fr 1fr; gap: 14px; }
+      .output-cards .out-card:last-child { grid-column: 1 / -1; }
+
+      .bottom-inner { grid-template-columns: 1fr; text-align: center; }
+      .you-build-box { max-width: 200px; margin: 0 auto; }
+      .crown-box { display: none; }
+
+      .banner-inner { gap: 16px; }
+      .fix-that { font-size: 28px; }
+
+      .howto-section,
+      .output-section,
+      .signal-section,
+      .bottom-section { padding: 48px 24px; }
+
+      .banner { padding: 36px 24px; }
+      footer { padding: 20px 24px; }
+    }
+
+    /* Mobile (≤600px) */
     @media (max-width: 600px) {
-      nav { padding: 16px 20px; }
-      .steps { grid-template-columns: 1fr; }
-      .hero, .screenshot, .examples, .how, .setup, .meta { padding: 0 20px; }
-      .hero { padding-top: 48px; }
-      .screen-body { height: auto; flex-direction: column; }
-      .screen-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
+      nav { padding: 14px 20px; }
+      .logo { font-size: 15px; }
+      .nav-gh { display: none; }
+      .btn-green { font-size: 12px; padding: 8px 14px; }
+
+      .hero { padding: 32px 20px 0; }
+      .hero-headline { font-size: clamp(64px, 20vw, 96px); letter-spacing: 0; }
+      .hero-tagline { font-size: 15px; }
+      .hero-sub { font-size: 14px; }
+      .hero-ctas { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .btn-green-lg { font-size: 14px; padding: 11px 20px; }
+      .hero-right { display: none; }
+
+      /* comparison: hide annotations, stack vertically */
+      .comp-labels {
+        grid-template-columns: 1fr 1fr;
+        padding: 0;
+        gap: 12px;
+      }
+      .comp-labels > div:nth-child(2) { display: none; }
+
+      .comp-row {
+        grid-template-columns: 1fr;
+        gap: 16px;
+      }
+      .ann { display: none; }
+      .comp-arrow-center { text-align: center; }
+      .big-arrow { font-size: 36px; }
+
+      .comp-bottom {
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      .comp-bottom > div:nth-child(1),
+      .comp-bottom > div:nth-child(3),
+      .comp-bottom > div:nth-child(5) { display: none; }
+
+      .comparison-section { padding: 0 20px 40px; }
+
+      .signal-section,
+      .howto-section,
+      .output-section,
+      .bottom-section { padding: 40px 20px; }
+
+      .signal-headline { font-size: clamp(36px, 12vw, 52px); }
+      .signal-cards { grid-template-columns: 1fr; }
+
+      .steps { gap: 0; }
+
+      .banner { padding: 28px 20px; }
+      .banner-inner { flex-direction: column; align-items: flex-start; gap: 12px; }
+      .banner-text { font-size: clamp(22px, 7vw, 32px); }
+      .fix-that { font-size: 32px; transform: rotate(-2deg); align-self: flex-end; }
+
+      .output-cards { grid-template-columns: 1fr; }
+      .output-cards .out-card:last-child { grid-column: auto; }
+
+      .stop-posting { font-size: clamp(36px, 12vw, 56px); }
+      .bottom-ctas { flex-direction: column; align-items: center; }
+      .you-build-box { display: none; }
+      .bottom-inner { gap: 24px; }
+
+      .howto-header { font-size: clamp(22px, 7vw, 32px); }
+
+      footer { flex-direction: column; gap: 12px; text-align: center; }
+      .footer-left { flex-direction: column; gap: 4px; align-items: center; }
     }
   </style>
 </head>
 <body>
-  <nav>
-    <div class="nav-logo">postmaxxing ✦</div>
-    <div class="nav-right">
-      <a href="https://github.com/myrondoesnotcode/postmaxxing" class="nav-link">GitHub →</a>
-      <a href="https://github.com/myrondoesnotcode/postmaxxing/archive/refs/heads/main.zip" class="nav-cta">Download</a>
-    </div>
-  </nav>
 
+<!-- SVG FILTERS -->
+<svg width="0" height="0" style="position:absolute;overflow:hidden">
+  <defs>
+    <filter id="roughen" x="-2%" y="-2%" width="104%" height="104%">
+      <feTurbulence type="fractalNoise" baseFrequency="0.04" numOctaves="4" seed="3" result="noise"/>
+      <feDisplacementMap in="SourceGraphic" in2="noise" scale="2" xChannelSelector="R" yChannelSelector="G"/>
+    </filter>
+  </defs>
+</svg>
+
+<!-- NAV -->
+<nav>
+  <span class="logo">postmaxx_</span>
+  <div class="nav-right">
+    <a href="https://github.com/myronlabs/postmaxx" class="nav-gh">GitHub ↗</a>
+    <a href="https://github.com/myronlabs/postmaxx" class="btn-green">
+      Get it free →
+    </a>
+  </div>
+</nav>
+
+<!-- HERO -->
+<div style="border-bottom: 1px solid var(--border); padding-bottom: 56px;">
   <section class="hero">
-    <h1>Turn your Claude Code sessions into<br><em>posts people actually want to read</em></h1>
-    <p>Postmaxxing finds the reasoning behind your decisions and writes the tweet. You hit Post.</p>
-    <div class="cta-group">
-      <a href="https://github.com/myrondoesnotcode/postmaxxing" class="btn-primary">
-        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
-        Get it free on GitHub
-      </a>
-      <a href="https://github.com/myrondoesnotcode/postmaxxing/archive/refs/heads/main.zip" class="btn-secondary">⬇ Download ZIP</a>
-      <div class="api-note">Requires an <a href="https://console.anthropic.com/" style="color:var(--text3);text-decoration:underline">Anthropic API key</a> · ~$0.01/run · macOS · Node 18+</div>
+    <div class="hero-left">
+      <!-- spark decorations -->
+      <div style="position:relative; display:inline-block;">
+        <span style="position:absolute; top:-18px; left:4px; font-size:20px; color:var(--green); font-weight:900; pointer-events:none; font-family:'Bebas Neue',sans-serif;">✦</span>
+        <span style="position:absolute; top:-10px; left:44px; font-size:12px; color:var(--green); pointer-events:none;">✦</span>
+        <span style="position:absolute; top:4px; left:-18px; font-size:14px; color:var(--green); pointer-events:none;">✦</span>
+      </div>
+
+      <h1 class="hero-headline">
+        <span class="headline-white">IT'S TIME TO</span>
+        <span class="headline-green">POSTMAXX.</span>
+      </h1>
+
+      <p class="hero-tagline">
+        Your code is good. <span class="green">Your posts are not.</span>
+      </p>
+
+      <p class="hero-sub">
+        Postmaxx turns Claude Code sessions into<br>
+        high-signal X posts people <u>actually</u> want to read.
+      </p>
+
+      <div class="hero-ctas">
+        <a href="https://github.com/myronlabs/postmaxx" class="btn-green-lg">
+          <svg class="gh-icon" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Get it free on GitHub
+        </a>
+        <a href="#" class="btn-ghost">Download ZIP ↓</a>
+      </div>
+
+      <p class="hero-meta">
+        Requires an <a href="#">Anthropic API key</a> &nbsp;·&nbsp; ~$0.01/run &nbsp;·&nbsp; macOS &nbsp;·&nbsp; Node 18+
+      </p>
+    </div>
+
+    <div class="hero-right">
+      <div class="callout-box">
+        <div class="callout-icon">⚡</div>
+        <div class="callout-text">
+          TURN TERMINAL<br>CHAOS INTO<br><span class="green">X SIGNAL.</span>
+        </div>
+      </div>
     </div>
   </section>
+</div>
 
-  <section class="screenshot">
-    <div class="screen-frame">
-      <div class="screen-bar">
-        <div class="dot dot-r"></div><div class="dot dot-y"></div><div class="dot dot-g"></div>
-      </div>
-      <div class="screen-body">
-        <div class="screen-sidebar">
-          <div style="font-size:11px;color:#555;margin-bottom:10px">Sessions</div>
-          <div class="fake-item sel"><div class="p">clipmatic</div><div class="m">2h ago · 14kb</div></div>
-          <div class="fake-item"><div class="p">parsha</div><div class="m">5h ago · 4235kb</div></div>
-          <div class="fake-item"><div class="p">postmaxxing</div><div class="m">1d ago · 1461kb</div></div>
+<!-- COMPARISON -->
+<section class="comparison-section">
+  <div class="comp-labels">
+    <div class="comp-label-text bad">why no one cares</div>
+    <div></div>
+    <div class="comp-label-text good">same session. postmaxxed.</div>
+  </div>
+
+  <div class="comp-row">
+    <!-- left annotation -->
+    <div class="ann">
+      <span class="ann-arrow">→</span>
+      you after<br>6 hours of<br>coding
+    </div>
+
+    <!-- bad tweet -->
+    <div class="tweet">
+      <div class="tweet-head">
+        <div class="avi">🧑‍💻</div>
+        <div>
+          <div class="tweet-name">dev bro <span style="color:#1d9bf0">✓</span></div>
+          <div class="tweet-handle">@devbro</div>
         </div>
-        <div class="screen-main">
-          <div class="fake-card">
-            <div class="fake-badge">SINGLE · STORY</div>
-            <div class="fake-tweet">three weeks with the wrong number.<br>$0.16/scan at $19 = losing money on<br>every heavy user. fixed: $29 + 100-scan<br>cap. most users do under 50 anyway.</div>
-            <div class="fake-footer">
-              <div class="fake-count">✓ 187/280</div>
-              <div class="fake-btn">Post to X →</div>
-            </div>
+      </div>
+      <div class="tweet-body" style="color:#888;">
+        just shipped something cool :)<br><br>
+        pretty excited about it<br><br>
+        more to come!!!<br><br>
+        thoughts?
+      </div>
+      <div class="tweet-stats">
+        <span class="stat">💬 3</span>
+        <span class="stat">🔁 1</span>
+        <span class="stat">🤍 7</span>
+        <span class="stat">📊 170</span>
+      </div>
+    </div>
+
+    <!-- center arrow -->
+    <div class="comp-arrow-center">
+      <span class="big-arrow">→</span>
+    </div>
+
+    <!-- good tweet -->
+    <div class="tweet" style="border-color:#2a3a2a;">
+      <div class="tweet-head">
+        <div class="avi">🧑‍💻</div>
+        <div>
+          <div class="tweet-name">dev bro <span style="color:#1d9bf0">✓</span></div>
+          <div class="tweet-handle">@devbro</div>
+        </div>
+      </div>
+      <div class="tweet-body">
+        shipped this wrong for 3 weeks<br><br>
+        $0.16/scan at $19 = losing money on every heavy user<br><br>
+        fixed:<br>
+        $29 + 100-scan cap<br>
+        most users never hit 50 anyway
+      </div>
+      <div class="tweet-stats">
+        <span class="stat">💬 12</span>
+        <span class="stat">🔁 8</span>
+        <span class="stat stat-red">❤️ 120</span>
+        <span class="stat">📊 2.3K</span>
+      </div>
+    </div>
+
+    <!-- right annotation -->
+    <div class="ann" style="text-align:left; padding-left:12px;">
+      ←<br>actual<br>signal
+    </div>
+  </div>
+
+  <div class="comp-bottom">
+    <div></div>
+    <div class="bottom-ann bad">stop doing this ♪</div>
+    <div></div>
+    <div class="bottom-ann good">postmaxxed</div>
+    <div></div>
+  </div>
+</section>
+
+<!-- SIGNAL / EXAMPLES -->
+<section class="signal-section">
+  <div class="signal-inner">
+    <div class="signal-left">
+      <div class="signal-headline">
+        YOUR TERMINAL<br>
+        IS FULL OF <span class="green">SIGNAL.</span><br>
+        YOUR POSTS<br>
+        ARE FULL OF <span class="green">VIBES.</span>
+      </div>
+      <p class="signal-sub">
+        Decisions. Tradeoffs. Numbers.<br>
+        The stuff people <u>actually</u> care about.
+      </p>
+    </div>
+
+    <div class="signal-right">
+      <div class="signal-cards">
+        <div class="ex-card">
+          <div class="ex-tag"><span class="ex-icon">$</span> PRICING INSIGHT</div>
+          <div class="ex-body">
+            tested $19, $29, $39.<br>
+            $29 had highest conversion + lowest refund rate. anchoring works
           </div>
+          <div class="ex-footer">generated by postmaxx</div>
+        </div>
+
+        <div class="ex-card">
+          <div class="ex-tag"><span class="ex-icon">&lt;/&gt;</span> TECHNICAL DECISION</div>
+          <div class="ex-body">
+            quality gate before API calls: session needs 4+ messages + 5kb min below that → no signal tool returns has_content: false
+          </div>
+          <div class="ex-footer">generated by postmaxx</div>
+        </div>
+
+        <div class="ex-card">
+          <div class="ex-tag"><span class="ex-icon">💡</span> LESSON LEARNED</div>
+          <div class="ex-body">
+            ship fast ≠ ship right<br>
+            3 weeks of wrong pricing cost more than 1 day of thinking
+          </div>
+          <div class="ex-footer">generated by postmaxx</div>
         </div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="examples">
-    <h2>Real output</h2>
-    <p class="examples-sub">Generated from actual Claude Code sessions — unedited</p>
-    <div class="example-tweet">
-      <div class="label">Story · single</div>
-      three weeks with the wrong number. $0.16/scan at $19 = losing money on every heavy user. fixed: $29 + 100-scan cap. most users do under 50 anyway.
+<!-- HOW IT WORKS -->
+<section class="howto-section">
+  <div class="howto-inner">
+    <div class="howto-header">
+      HOW <span class="green">POSTMAXXING</span> WORKS
     </div>
-    <div class="example-tweet">
-      <div class="label">Story · thread (1/3)</div>
-      found 9 Christian references buried in Parsha Map's content. 4 direct Gospel mentions, 2 NT citations, 1 Tissot painting of Jesus healing lepers — in a Jewish Torah learning app. had to clean it all out.
-    </div>
-    <div class="example-tweet">
-      <div class="label">Technical · single</div>
-      <code>systemBackgroundColor</code> in LaunchScreen.storyboard resolves to black in dark mode. hardcoded <code>#fcf9f0</code> instead. less dynamic, guaranteed correct. sometimes the boring fix is the right fix.
-    </div>
-  </section>
-
-  <section class="how">
-    <h2>How it works</h2>
     <div class="steps">
       <div class="step">
-        <div class="step-num">1</div>
-        <h3>Session</h3>
-        <p>Pick any Claude Code session. Postmaxxing reads the conversation, not the diff.</p>
+        <div class="step-top">
+          <div class="step-num">1</div>
+          <div class="step-icon-box">⌨️</div>
+        </div>
+        <div class="step-title">Pick a Claude Code session</div>
+        <div class="step-desc">We read the conversation. Yes, even the messy parts.</div>
       </div>
+
+      <div class="step-arrow">→</div>
+
       <div class="step">
-        <div class="step-num">2</div>
-        <h3>Extract</h3>
-        <p>Haiku finds the decisions, trade-offs, and numbers. Sonnet turns them into posts.</p>
+        <div class="step-top">
+          <div class="step-icon-box" style="width:38px;height:38px;">🔍</div>
+        </div>
+        <div class="step-title">Extract the signal</div>
+        <div class="step-desc">We delete the boring parts. (Most of it.)</div>
       </div>
+
+      <div class="step-arrow">→</div>
+
       <div class="step">
-        <div class="step-num">3</div>
-        <h3>Post</h3>
-        <p>Edit inline. Hit Post to X. One click opens a pre-filled tweet composer.</p>
+        <div class="step-top">
+          <div class="step-icon-box">📤</div>
+        </div>
+        <div class="step-title">Post something that hits</div>
+        <div class="step-desc">Edit inline. Click once. Suddenly you sound like you know what you're doing.</div>
       </div>
     </div>
-  </section>
+  </div>
+</section>
 
-  <section class="setup">
-    <h2>Get running in 2 minutes</h2>
-    <p class="setup-sub">Zero npm installs. Just Node.js and an API key.</p>
-    <div class="setup-steps">
-      <div class="setup-step">
-        <div class="setup-n">01</div>
-        <div class="setup-text">
-          <h4>Download</h4>
-          <p><a href="https://github.com/myrondoesnotcode/postmaxxing/archive/refs/heads/main.zip">Download the ZIP</a> or <code>git clone https://github.com/myrondoesnotcode/postmaxxing</code></p>
+<!-- BANNER -->
+<div class="banner">
+  <div class="banner-inner">
+    <div class="banner-text">
+      CLAUDE MADE YOU <span class="green">10X</span> FASTER AT CODING.<br>
+      YOU'RE STILL <span class="green">1X</span> AT EXPLAINING IT.
+    </div>
+    <span class="fix-that">fix<br>that.</span>
+  </div>
+</div>
+
+<!-- REAL OUTPUT -->
+<section class="output-section">
+  <div class="output-inner">
+    <div class="output-header">
+      <span class="output-title">REAL OUTPUT</span>
+      <span class="output-sub">Generated from actual Claude Code sessions — unedited</span>
+    </div>
+    <div class="output-cards">
+
+      <div class="out-card">
+        <div class="out-type">Story / Single</div>
+        <div class="tweet-head">
+          <div class="avi">🌊</div>
+          <div>
+            <div class="tweet-name">levelsio <span style="color:#1d9bf0">✓</span></div>
+            <div class="tweet-handle">@levelsio</div>
+          </div>
+        </div>
+        <div class="tweet-body">it removed 90% of my cringe</div>
+        <div class="tweet-stats">
+          <span class="stat">💬 5</span>
+          <span class="stat">🔁 1</span>
+          <span class="stat stat-red">❤️ 73</span>
+          <span class="stat">📊 988</span>
         </div>
       </div>
-      <div class="setup-step">
-        <div class="setup-n">02</div>
-        <div class="setup-text">
-          <h4>Add your API key</h4>
-          <p>Create a <code>.env</code> file in the folder: <code>ANTHROPIC_API_KEY=sk-ant-...</code></p>
-          <p style="margin-top:6px;font-size:12px;color:var(--text3)">Get a key at <a href="https://console.anthropic.com/" style="color:var(--text3)">console.anthropic.com</a> · costs ~$0.01/run</p>
+
+      <div class="out-card">
+        <div class="out-type">Story / Thread</div>
+        <div class="tweet-head">
+          <div class="avi">👤</div>
+          <div>
+            <div class="tweet-name">Parsha <span style="color:#1d9bf0">✓</span></div>
+            <div class="tweet-handle">@parsha</div>
+          </div>
+        </div>
+        <div class="tweet-body">
+          I built a tool to help devs stop posting mid takes<br>
+          here's everything I learned 👇
+        </div>
+        <div class="tweet-stats">
+          <span class="stat">💬 23</span>
+          <span class="stat">🔁 42</span>
+          <span class="stat stat-red">❤️ 309</span>
+          <span class="stat">📊 4.2K</span>
         </div>
       </div>
-      <div class="setup-step">
-        <div class="setup-n">03</div>
-        <div class="setup-text">
-          <h4>Run it</h4>
-          <p><code>node devlog.js --ui</code> — browser opens automatically, sessions load, start generating.</p>
+
+      <div class="out-card">
+        <div class="out-type">Technical / Single</div>
+        <div class="tweet-head">
+          <div class="avi">🦊</div>
+          <div>
+            <div class="tweet-name">swyx <span style="color:#1d9bf0">✓</span></div>
+            <div class="tweet-handle">@swyx</div>
+          </div>
         </div>
+        <div class="tweet-body">
+          here's how we reduced cold start time by 87% using lazy imports + edge caching
+        </div>
+        <div class="tweet-stats">
+          <span class="stat">💬 11</span>
+          <span class="stat">🔁 6</span>
+          <span class="stat stat-red">❤️ 128</span>
+          <span class="stat">📊 2.1K</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- BOTTOM CTA -->
+<section class="bottom-section">
+  <div class="bottom-inner">
+
+    <div class="you-build-box">
+      <div class="you-build-text">YOU BUILD.<br>WE WORD.</div>
+      <div class="you-build-heart">♡</div>
+    </div>
+
+    <div class="bottom-center">
+      <div class="stop-posting">
+        STOP POSTING <span class="green">MID.</span>
+      </div>
+      <p class="stop-sub">Your next good post is already in your last session.</p>
+      <div class="bottom-ctas">
+        <a href="https://github.com/myronlabs/postmaxx" class="btn-green-lg">
+          <svg class="gh-icon" viewBox="0 0 16 16"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+          Get it free on GitHub
+        </a>
+        <a href="#" class="btn-ghost">Download ZIP ↓</a>
       </div>
     </div>
-  </section>
 
-  <section class="meta">
-    <p>Built in public using itself. Every post about building this was generated by this.</p>
-    <p><a href="https://x.com/myrons">Follow the build →</a></p>
-  </section>
+    <div class="crown-box">
+      <span class="crown-icon">👑</span>
+      <div class="crown-text">same session.<br>postmaxxed.</div>
+    </div>
 
-  <footer>
-    postmaxxing is open source · <a href="https://github.com/myrondoesnotcode/postmaxxing">github.com/myrondoesnotcode/postmaxxing</a>
-  </footer>
+  </div>
+</section>
+
+<!-- FOOTER -->
+<footer>
+  <div class="footer-left">
+    <span class="footer-logo">postmaxx_</span>
+    <span class="footer-open">open source</span>
+  </div>
+  <div class="footer-right">
+    <a href="https://github.com/myronlabs/postmaxx" class="footer-link">GitHub ↗</a>
+    <a href="#" class="footer-link">X ↗</a>
+  </div>
+</footer>
+
 </body>
 </html>
