@@ -2,6 +2,10 @@
 
 Turn your Claude Code sessions into building-in-public posts. Surfaces the **reasoning** behind your decisions — not changelogs, not hype.
 
+![postmaxx_ demo](docs/screenshots/demo.gif)
+
+![postmaxx_ UI](docs/screenshots/ui.png)
+
 ## Requirements
 
 - Node.js 18+
@@ -22,18 +26,19 @@ Get one at [console.anthropic.com/settings/keys](https://console.anthropic.com/s
 echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 ```
 
-**3. Run it**
+**3. Open the UI**
 ```bash
-node devlog.js
+node devlog.js --ui
 ```
 
-That's it. It finds your most recent Claude Code session, extracts the reasoning, and generates a post.
+Opens at [http://localhost:3000](http://localhost:3000). Pick a session, generate candidates, edit and post.
 
-## Usage
+## CLI (optional)
+
+If you prefer the terminal over the UI:
 
 ```bash
-node devlog.js                    # most recent session
-node devlog.js --ui               # open web UI in browser
+node devlog.js                    # most recent session, prints to terminal
 node devlog.js --list             # pick a session interactively
 node devlog.js --mode technical   # engineering lens instead of story
 node devlog.js --count 3          # generate 3 candidates
@@ -52,10 +57,3 @@ Get one free at [typefully.com](https://typefully.com) → Settings → API.
 
 Single tweets post directly to X via the browser. Threads go through Typefully.
 
-## Web UI
-
-```bash
-node devlog.js --ui
-```
-
-Opens at [http://localhost:3000](http://localhost:3000). Pick a session, generate candidates, edit and post.
