@@ -275,6 +275,18 @@ const HTML_APP = `<!DOCTYPE html>
     }
     function updateChar(el, cid) { document.getElementById(cid).innerHTML = charHtml(el.value); }
     function postToX(tid) { window.open('https://x.com/intent/tweet?text='+encodeURIComponent(document.getElementById(tid).value),'_blank'); }
+    async function postThread(i, count) {
+      var tweets = [];
+      for (var j=0; j<count; j++) { var el=document.getElementById('tw'+i+'_'+j); if(el) tweets.push(el.value); }
+      var btn = document.getElementById('ptbtn'+i);
+      btn.disabled = true; btn.textContent = 'Posting…';
+      try {
+        var res = await fetch('/api/push',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({tweets:tweets})});
+        var data = await res.json();
+        if (data.error) { alert('Error: '+data.error); btn.disabled=false; btn.textContent='Post thread →'; }
+        else { btn.textContent='Posted ✓'; btn.style.borderColor='#4caf50'; }
+      } catch(e) { alert('Failed: '+e.message); btn.disabled=false; btn.textContent='Post thread →'; }
+    }
     function setMode(m) {
       mode = m;
       document.getElementById('btn-story').classList.toggle('active', m==='story');
@@ -290,10 +302,33 @@ const HTML_APP = `<!DOCTYPE html>
     async function init() {
       try {
         var res = await fetch('/api/sessions'), sessions = await res.json();
-        window.__sessions = sessions;
         var list = document.getElementById('session-list');
         if (!sessions.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions. Run with --days 30.</div>'; return; }
-        list.innerHTML = sessions.map(function(s,i){ return '<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+esc(s.age)+' · '+s.sizeKb+'kb</div>'+'</div>'; }).join('');
+        // sort: by day desc, then by size desc within each day
+        sessions.sort(function(a,b){
+          var da=a.mtime.slice(0,10), db=b.mtime.slice(0,10);
+          if (da!==db) return da>db?-1:1;
+          return b.sizeKb-a.sizeKb;
+        });
+        window.__sessions = sessions;
+        var html='', lastDay='';
+        sessions.forEach(function(s,i){
+          var day=s.mtime.slice(0,10);
+          if (day!==lastDay) {
+            var label=formatDay(day);
+            html+='<div style="padding:8px 14px 4px;font-size:10px;font-weight:600;letter-spacing:.08em;color:var(--text3);text-transform:uppercase;border-top:'+(lastDay?'1px solid var(--border2)':'none')+'">'+esc(label)+'</div>';
+            lastDay=day;
+          }
+          html+='<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+esc(s.age)+' · '+s.sizeKb+'kb</div>'+'</div>';
+        });
+        list.innerHTML=html;
+        function formatDay(iso){
+          var d=new Date(iso+'T12:00:00Z'), now=new Date();
+          var td=now.toISOString().slice(0,10), yd=new Date(now-864e5).toISOString().slice(0,10);
+          if (iso===td) return 'Today';
+          if (iso===yd) return 'Yesterday';
+          return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+        }
       } catch(e) { document.getElementById('session-list').innerHTML='<div class="s-meta" style="padding:14px;color:#e57373">Failed to load sessions</div>'; }
     }
     async function generate() {
@@ -322,9 +357,11 @@ const HTML_APP = `<!DOCTYPE html>
             tweets.map(function(t,j){ var tid='tw'+i+'_'+j, cid='cc'+i+'_'+j;
               return '<div class="thread-tweet"><div class="thread-num">'+(j+1)+'/'+tweets.length+'</div>'+
                 '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(t||'')+'</textarea>'+
-                '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(t||'')+'</span>'+
-                '<button class="post-btn" onclick="postToX(\\x27'+tid+'\\x27)">Post to X →</button></div></div>';
-            }).join('')+'</div></div>';
+                '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(t||'')+'</span></div></div>';
+            }).join('')+
+            '<div class="tweet-footer" style="margin-top:4px"><span></span>'+
+            '<button class="post-btn" id="ptbtn'+i+'" onclick="postThread('+i+','+tweets.length+')">Post thread →</button></div>'+
+            '</div></div>';
         }
         var text=c.text||'', tid='tw'+i, cid='cc'+i;
         return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div>'+
@@ -397,6 +434,32 @@ async function handleRequest(req, res) {
 
   if (req.method === 'POST' && urlPath === '/api/generate') {
     await handlePostGenerate(req, res);
+    return;
+  }
+
+  if (req.method === 'POST' && urlPath === '/api/push') {
+    try {
+      const body = await readBody(req);
+      const { tweets } = JSON.parse(body);
+      if (!TYPEFULLY_KEY) {
+        res.writeHead(400, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ error: 'Missing TYPEFULLY_API_KEY in .env' }));
+        return;
+      }
+      const content = (tweets || []).join('\n\n\n\n');
+      const tfRes = await fetch('https://api.typefully.com/v1/drafts/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-API-KEY': `Bearer ${TYPEFULLY_KEY}` },
+        body: JSON.stringify({ content, threadify: true }),
+      });
+      const data = await tfRes.json();
+      if (!tfRes.ok) throw new Error(data.message || tfRes.statusText);
+      res.writeHead(200, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: true }));
+    } catch (e) {
+      res.writeHead(500, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ error: e.message }));
+    }
     return;
   }
 
@@ -574,7 +637,9 @@ function findSessions(opts = {}) {
 
 function projectSlug(dir) {
   if (!dir) return dir;
-  const stripped = dir.replace(/^-/, '').replace(/-/g, '/');
+  // strip worktree suffix before extracting project name
+  const base = dir.replace(/--claude-worktrees-[^/]+$/, '');
+  const stripped = base.replace(/^-/, '').replace(/-/g, '/');
   const last = stripped.split('/').filter(Boolean).pop();
   return last || '';
 }
@@ -676,7 +741,7 @@ async function pushToTypefully(content) {
   const res = await fetch('https://api.typefully.com/v1/drafts/', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'X-API-KEY': `Bearer ${TYPEFULLY_KEY}` },
-    body: JSON.stringify({ content, threadify: false }),
+    body: JSON.stringify({ content, threadify: true }),
   });
   const data = await res.json();
   if (!res.ok) throw new Error(data.message || res.statusText);
@@ -819,7 +884,7 @@ async function handlePushAndApproval(result, slug) {
   const approvals = [];
   for (const i of indices) {
     const c       = result.candidates[i];
-    const content = c.shape === 'thread' ? (c.tweets || []).join('\n\n') : c.text;
+    const content = c.shape === 'thread' ? (c.tweets || []).join('\n\n\n\n') : c.text;
     try {
       await pushToTypefully(content);
       console.log(`  ✓ pushed: ${c.label}`);
@@ -933,9 +998,7 @@ async function runPipeline(sessionFile, mode, count, opts = {}) {
 
   const extraction = await extractStage1(sessionForPrompt, state, { apiKey, fetchFn: opts.fetchFn });
 
-  if (extraction.best_output_type === 'nothing' && !extraction.active_arc) {
-    return { nothing: true, message: 'Session had no articulated decisions or reasoning worth sharing.' };
-  }
+  if (extraction.best_output_type === 'nothing') extraction.best_output_type = 'drip';
 
   return generateStage2(extraction, state, {
     mode: mode || 'story',
@@ -990,13 +1053,7 @@ async function main() {
   const extraction = await extractStage1(sessionForPrompt, state, { apiKey: ANTHROPIC_KEY });
   process.stdout.write(' done\n');
 
-  // Stage 1 gate: nothing to share
-  // If Stage 1 found nothing AND no arc is in flight, there's nothing to write about.
-  // If an arc is active, fall through — a drip update is still useful.
-  if (extraction.best_output_type === 'nothing' && !extraction.active_arc) {
-    console.log('\n  No story today.\n  Session had no articulated decisions or reasoning worth sharing.\n  Try a session where you talked through a choice or trade-off.\n');
-    process.exit(0);
-  }
+  if (extraction.best_output_type === 'nothing') extraction.best_output_type = 'drip';
 
   process.stdout.write('  Generating (Sonnet)...');
   const result = await generateStage2(extraction, state, {
