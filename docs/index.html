@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>devlog — turn your Claude Code sessions into posts worth reading</title>
-  <meta name="description" content="Devlog reads your Claude Code sessions, finds the reasoning behind your decisions, and writes the tweet. You hit Post.">
+  <title>postmaxxing — turn your Claude Code sessions into posts worth reading</title>
+  <meta name="description" content="Postmaxxing reads your Claude Code sessions, finds the reasoning behind your decisions, and writes the tweet. You hit Post.">
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     :root { --bg: #0d0d0d; --bg2: #141414; --border: #222; --text: #e8e8e8; --text2: #888; --text3: #555; --blue: #1d6bf3; }
@@ -13,16 +13,27 @@
     a:hover { text-decoration: underline; }
 
     nav { padding: 20px 40px; display: flex; align-items: center; justify-content: space-between; border-bottom: 1px solid var(--border); }
-    .nav-logo { font-weight: 700; font-size: 18px; letter-spacing: -0.3px; }
+    .nav-logo { font-weight: 700; font-size: 18px; letter-spacing: -0.5px; }
+    .nav-right { display: flex; align-items: center; gap: 24px; }
     .nav-link { font-size: 14px; color: var(--text2); }
+    .nav-cta { font-size: 13px; font-weight: 600; background: var(--blue); color: #fff; padding: 7px 16px; border-radius: 6px; }
+    .nav-cta:hover { text-decoration: none; opacity: 0.9; }
 
     .hero { max-width: 720px; margin: 0 auto; padding: 80px 40px 60px; text-align: center; }
     .hero h1 { font-size: clamp(28px, 5vw, 48px); font-weight: 700; letter-spacing: -1px; line-height: 1.15; margin-bottom: 20px; }
     .hero h1 em { color: var(--text3); font-style: normal; }
-    .hero p { font-size: 18px; color: var(--text2); max-width: 520px; margin: 0 auto 36px; }
-    .install { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 24px; font-family: 'SF Mono', Monaco, monospace; font-size: 14px; display: inline-block; margin-bottom: 12px; }
+    .hero p { font-size: 18px; color: var(--text2); max-width: 520px; margin: 0 auto 40px; }
+
+    .cta-group { display: flex; flex-direction: column; align-items: center; gap: 12px; margin-bottom: 48px; }
+    .btn-primary { display: inline-flex; align-items: center; gap: 8px; background: var(--blue); color: #fff; font-size: 15px; font-weight: 600; padding: 12px 28px; border-radius: 8px; text-decoration: none; }
+    .btn-primary:hover { text-decoration: none; opacity: 0.9; }
+    .btn-secondary { font-size: 14px; color: var(--text2); }
+    .btn-secondary:hover { color: var(--text); text-decoration: none; }
+    .api-note { font-size: 12px; color: var(--text3); }
+
+    .install { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 14px 24px; font-family: 'SF Mono', Monaco, monospace; font-size: 13px; display: inline-block; }
     .install span { color: var(--text3); }
-    .sub-install { font-size: 13px; color: var(--text3); }
+    .sub-install { font-size: 12px; color: var(--text3); margin-top: 8px; }
 
     .screenshot { max-width: 900px; margin: 0 auto 80px; padding: 0 40px; }
     .screen-frame { background: var(--bg2); border: 1px solid var(--border); border-radius: 10px; overflow: hidden; }
@@ -57,14 +68,25 @@
     .step h3 { font-size: 14px; font-weight: 600; margin-bottom: 6px; }
     .step p { font-size: 13px; color: var(--text2); }
 
+    .setup { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; }
+    .setup h2 { font-size: 24px; font-weight: 600; margin-bottom: 8px; text-align: center; }
+    .setup-sub { font-size: 14px; color: var(--text2); text-align: center; margin-bottom: 36px; }
+    .setup-steps { display: flex; flex-direction: column; gap: 16px; }
+    .setup-step { background: var(--bg2); border: 1px solid var(--border); border-radius: 8px; padding: 20px 24px; display: flex; gap: 20px; align-items: flex-start; }
+    .setup-n { font-size: 11px; font-weight: 700; color: var(--blue); letter-spacing: 0.5px; flex-shrink: 0; padding-top: 2px; }
+    .setup-text h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .setup-text p { font-size: 13px; color: var(--text2); }
+    .setup-text code { font-family: 'SF Mono', Monaco, monospace; font-size: 12px; background: #111; border: 1px solid var(--border); padding: 2px 6px; border-radius: 3px; color: var(--text); }
+
     .meta { max-width: 720px; margin: 0 auto 80px; padding: 0 40px; text-align: center; }
     .meta p { font-size: 14px; color: var(--text2); margin-bottom: 8px; }
 
     footer { border-top: 1px solid var(--border); padding: 24px 40px; text-align: center; font-size: 13px; color: var(--text3); }
 
     @media (max-width: 600px) {
+      nav { padding: 16px 20px; }
       .steps { grid-template-columns: 1fr; }
-      .hero, .screenshot, .examples, .how, .meta { padding: 0 20px; }
+      .hero, .screenshot, .examples, .how, .setup, .meta { padding: 0 20px; }
       .hero { padding-top: 48px; }
       .screen-body { height: auto; flex-direction: column; }
       .screen-sidebar { width: 100%; border-right: none; border-bottom: 1px solid var(--border); }
@@ -73,15 +95,24 @@
 </head>
 <body>
   <nav>
-    <div class="nav-logo">devlog ✦</div>
-    <a href="https://github.com/myrons/devlog" class="nav-link">GitHub →</a>
+    <div class="nav-logo">postmaxxing ✦</div>
+    <div class="nav-right">
+      <a href="https://github.com/myrons/postmaxxing" class="nav-link">GitHub →</a>
+      <a href="https://github.com/myrons/postmaxxing/archive/refs/heads/main.zip" class="nav-cta">Download</a>
+    </div>
   </nav>
 
   <section class="hero">
     <h1>Turn your Claude Code sessions into<br><em>posts people actually want to read</em></h1>
-    <p>Devlog finds the reasoning behind your decisions and writes the tweet. You hit Post.</p>
-    <div class="install"><span>$</span> git clone https://github.com/myrons/devlog &amp;&amp; node devlog.js --ui</div><br>
-    <div class="sub-install">macOS · Node 18+ · zero dependencies</div>
+    <p>Postmaxxing finds the reasoning behind your decisions and writes the tweet. You hit Post.</p>
+    <div class="cta-group">
+      <a href="https://github.com/myrons/postmaxxing" class="btn-primary">
+        <svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+        Get it free on GitHub
+      </a>
+      <a href="https://github.com/myrons/postmaxxing/archive/refs/heads/main.zip" class="btn-secondary">⬇ Download ZIP</a>
+      <div class="api-note">Requires an <a href="https://console.anthropic.com/" style="color:var(--text3);text-decoration:underline">Anthropic API key</a> · ~$0.01/run · macOS · Node 18+</div>
+    </div>
   </section>
 
   <section class="screenshot">
@@ -94,7 +125,7 @@
           <div style="font-size:11px;color:#555;margin-bottom:10px">Sessions</div>
           <div class="fake-item sel"><div class="p">clipmatic</div><div class="m">2h ago · 14kb</div></div>
           <div class="fake-item"><div class="p">parsha</div><div class="m">5h ago · 4235kb</div></div>
-          <div class="fake-item"><div class="p">devlog</div><div class="m">1d ago · 1461kb</div></div>
+          <div class="fake-item"><div class="p">postmaxxing</div><div class="m">1d ago · 1461kb</div></div>
         </div>
         <div class="screen-main">
           <div class="fake-card">
@@ -133,7 +164,7 @@
       <div class="step">
         <div class="step-num">1</div>
         <h3>Session</h3>
-        <p>Pick any Claude Code session. Devlog reads the conversation, not the diff.</p>
+        <p>Pick any Claude Code session. Postmaxxing reads the conversation, not the diff.</p>
       </div>
       <div class="step">
         <div class="step-num">2</div>
@@ -148,13 +179,42 @@
     </div>
   </section>
 
+  <section class="setup">
+    <h2>Get running in 2 minutes</h2>
+    <p class="setup-sub">Zero npm installs. Just Node.js and an API key.</p>
+    <div class="setup-steps">
+      <div class="setup-step">
+        <div class="setup-n">01</div>
+        <div class="setup-text">
+          <h4>Download</h4>
+          <p><a href="https://github.com/myrons/postmaxxing/archive/refs/heads/main.zip">Download the ZIP</a> or <code>git clone https://github.com/myrons/postmaxxing</code></p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="setup-n">02</div>
+        <div class="setup-text">
+          <h4>Add your API key</h4>
+          <p>Create a <code>.env</code> file in the folder: <code>ANTHROPIC_API_KEY=sk-ant-...</code></p>
+          <p style="margin-top:6px;font-size:12px;color:var(--text3)">Get a key at <a href="https://console.anthropic.com/" style="color:var(--text3)">console.anthropic.com</a> · costs ~$0.01/run</p>
+        </div>
+      </div>
+      <div class="setup-step">
+        <div class="setup-n">03</div>
+        <div class="setup-text">
+          <h4>Run it</h4>
+          <p><code>node devlog.js --ui</code> — browser opens automatically, sessions load, start generating.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <section class="meta">
-    <p>Built in public using itself. Every post about building devlog was generated by devlog.</p>
+    <p>Built in public using itself. Every post about building this was generated by this.</p>
     <p><a href="https://x.com/myrons">Follow the build →</a></p>
   </section>
 
   <footer>
-    devlog is open source · <a href="https://github.com/myrons/devlog">github.com/myrons/devlog</a>
+    postmaxxing is open source · <a href="https://github.com/myrons/postmaxxing">github.com/myrons/postmaxxing</a>
   </footer>
 </body>
 </html>

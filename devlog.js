@@ -40,7 +40,7 @@ const PUSH_TO_TF     = hasFlag('--push');
 const SAVE_TO_NOTES  = hasFlag('--notes');
 const LIST_MODE      = hasFlag('--list');
 const USE_UI         = hasFlag('--ui');
-const UI_PORT        = parseInt(getArg('--port') || '3000');
+const UI_PORT        = parseInt(getArg('--port') || process.env.PORT || '3000');
 const MODE           = getArg('--mode')    || 'story';  // story | technical
 const CONTEXT        = getArg('--context') || null;     // optional one-line hint
 const COUNT          = parseInt(getArg('--count') || '5');
@@ -321,16 +321,16 @@ const HTML_APP = `<!DOCTYPE html>
           return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div><div>'+
             tweets.map(function(t,j){ var tid='tw'+i+'_'+j, cid='cc'+i+'_'+j;
               return '<div class="thread-tweet"><div class="thread-num">'+(j+1)+'/'+tweets.length+'</div>'+
-                '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\''+cid+'\')">'+esc(t||'')+'</textarea>'+
+                '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(t||'')+'</textarea>'+
                 '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(t||'')+'</span>'+
-                '<button class="post-btn" onclick="postToX(\''+tid+'\')">Post to X →</button></div></div>';
+                '<button class="post-btn" onclick="postToX(\\x27'+tid+'\\x27)">Post to X →</button></div></div>';
             }).join('')+'</div></div>';
         }
         var text=c.text||'', tid='tw'+i, cid='cc'+i;
         return '<div class="candidate"><div class="cand-header"><span class="badge">'+badge+'</span><span class="cand-label">'+label+'</span></div>'+
-          '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\''+cid+'\')">'+esc(text)+'</textarea>'+
+          '<textarea class="tweet-box" id="'+tid+'" oninput="updateChar(this,\\x27'+cid+'\\x27)">'+esc(text)+'</textarea>'+
           '<div class="tweet-footer"><span id="'+cid+'">'+charHtml(text)+'</span>'+
-          '<button class="post-btn" onclick="postToX(\''+tid+'\')">Post to X →</button></div></div>';
+          '<button class="post-btn" onclick="postToX(\\x27'+tid+'\\x27)">Post to X →</button></div></div>';
       }).join('');
     }
     init();
@@ -397,6 +397,18 @@ async function handleRequest(req, res) {
 
   if (req.method === 'POST' && urlPath === '/api/generate') {
     await handlePostGenerate(req, res);
+    return;
+  }
+
+  if (req.method === 'GET' && urlPath === '/landing') {
+    const landingPath = path.join(__dirname, 'docs', 'index.html');
+    if (fs.existsSync(landingPath)) {
+      res.writeHead(200, { 'Content-Type': 'text/html' });
+      res.end(fs.readFileSync(landingPath));
+    } else {
+      res.writeHead(404, { 'Content-Type': 'text/plain' });
+      res.end('Landing page not found');
+    }
     return;
   }
 
