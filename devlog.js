@@ -271,6 +271,10 @@ const HTML_APP = `<!DOCTYPE html>
     .gen-btn:disabled { opacity: 0.3; cursor: not-allowed; }
 
     /* session list */
+    .session-list-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 16px 4px; border-bottom: 1px solid var(--border); }
+    .sessions-label { font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; font-family: 'JetBrains Mono', monospace; }
+    .refresh-btn { font-size: 11px; color: var(--muted); background: transparent; border: none; cursor: pointer; padding: 2px 0; font-family: 'DM Sans', sans-serif; transition: color 0.15s; }
+    .refresh-btn:hover { color: var(--green); }
     .session-list { flex: 1; overflow-y: auto; }
     .day-header { padding: 10px 16px 5px; font-size: 10px; font-weight: 700; letter-spacing: .1em; color: var(--muted); text-transform: uppercase; border-top: 1px solid var(--border); font-family: 'JetBrains Mono', monospace; }
     .day-header:first-child { border-top: none; }
@@ -356,6 +360,10 @@ const HTML_APP = `<!DOCTYPE html>
           <textarea class="ctx-area" id="context" placeholder="solo founder, building X, prev Y eng…"></textarea>
         </div>
         <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>Generate →</button>
+      </div>
+      <div class="session-list-header">
+        <span class="sessions-label">Sessions</span>
+        <button class="refresh-btn" onclick="init()">↻ refresh</button>
       </div>
       <div class="session-list" id="session-list">
         <div class="s-meta" style="padding:14px">Loading…</div>
@@ -452,8 +460,9 @@ const HTML_APP = `<!DOCTYPE html>
 
     async function init() {
       try {
-        var res = await fetch('/api/sessions'), sessions = await res.json();
         var list = document.getElementById('session-list');
+        list.innerHTML = '<div class="s-meta" style="padding:14px">Loading…</div>';
+        var res = await fetch('/api/sessions'), sessions = await res.json();
         if (!sessions.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions found.</div>'; return; }
         sessions.sort(function(a,b){
           var da=a.mtime.slice(0,10), db=b.mtime.slice(0,10);
