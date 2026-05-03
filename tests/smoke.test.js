@@ -11,7 +11,7 @@ const {
   loadState,
   recordApprovals,
   saveState,
-} = require('../devlog.js');
+} = require('../postmaxx.js');
 
 // ─── Fixture helpers ───────────────────────────────────────────────────────
 
@@ -186,7 +186,7 @@ test('smoke: session with active arc → extraction reflects continuation', asyn
 // ─── Approval recording integration ───────────────────────────────────────
 
 test('smoke: approvals from pipeline update project state', () => {
-  const tmp  = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-smoke-'));
+  const tmp  = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-smoke-'));
   const slug = 'clipmatic';
 
   recordApprovals(slug, [

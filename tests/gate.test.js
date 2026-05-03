@@ -2,7 +2,7 @@ const test = require('node:test');
 const assert = require('node:assert');
 const fs = require('node:fs');
 const path = require('node:path');
-const { passesPreGate } = require('../devlog.js');
+const { passesPreGate } = require('../postmaxx.js');
 
 test('passesPreGate rejects session under 5KB', () => {
   const small = fs.readFileSync(path.join(__dirname, 'fixtures/session-thin.jsonl'), 'utf8');

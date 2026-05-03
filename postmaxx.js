@@ -12,15 +12,21 @@ const CONFIG_DIR  = path.join(os.homedir(), '.postmaxxing');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config');
 
 function loadEnv() {
-  // load from ~/.postmaxxing/config first (npx-friendly), then local .env
-  for (const envPath of [CONFIG_FILE, path.join(__dirname, '.env')]) {
-    if (!fs.existsSync(envPath)) continue;
-    fs.readFileSync(envPath, 'utf8')
-      .split('\n')
-      .forEach(line => {
-        const [k, ...v] = line.split('=');
-        if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
-      });
+  // build candidate paths: ~/.postmaxxing/config, then walk up from __dirname looking for .env
+  const candidates = [CONFIG_FILE];
+  let dir = __dirname;
+  for (let i = 0; i < 8; i++) {
+    candidates.push(path.join(dir, '.env'));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  const parseEnv = (text) => text.split('\n').forEach(line => {
+    const [k, ...v] = line.split('=');
+    if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
+  });
+  for (const envPath of candidates) {
+    if (fs.existsSync(envPath)) parseEnv(fs.readFileSync(envPath, 'utf8'));
   }
 }
 loadEnv();
@@ -48,6 +54,7 @@ const MIN_SESSION_BYTES  = 5 * 1024;
 const MIN_SESSION_LINES  = 8; // 4 exchanges × 2 messages
 const HAIKU_MODEL        = 'claude-haiku-4-5';
 const SONNET_MODEL       = 'claude-sonnet-4-6';
+const OPUS_MODEL         = 'claude-opus-4-7';
 
 const args     = process.argv.slice(2);
 const getArg   = (flag) => { const i = args.indexOf(flag); return i !== -1 ? args[i + 1] : null; };
@@ -191,6 +198,28 @@ const THREAD_EXAMPLES = `What good thread hooks look like (tweet 1 only):
 "the bug wasn't in the code. it was in my assumption about how the API worked."
 Note: hooks end with a colon or create a gap the reader must fill. Never summarize the thread in tweet 1.`;
 
+const TECHNICAL_VOICE_RULES = `Technical voice rules:
+- Name the actual thing: library name, function name, error message, model name, algorithm. Never say "a library" or "an approach".
+- Lead with numbers when you have them: before/after latency, file sizes, line counts, benchmark results.
+- The trade-off accepted > the solution chosen. What did you give up? Why was it worth it?
+- One concrete technical thing per tweet. Not a journey, not a reflection.
+- Terse. Jargon is fine — the reader will look it up or already knows.
+- No "I learned", "I realized", "this changed everything", "game-changer".
+- No em-dashes. Lowercase is fine. Short sentences.
+- Anti-pattern: "I used a more efficient approach" — worthless. Say "switched from O(n²) to O(n log n) via a hash map".
+- Anti-pattern: "I decided to use a different architecture" — worthless. Say "dropped the saga pattern, moved to direct DB writes, removed 400 lines".`;
+
+const TECHNICAL_SINGLE_EXAMPLES = `What good technical tweets look like:
+"dropped lodash. bundle 87kb → 31kb. it was added 3 years ago for _.cloneDeep. structuredClone() ships in node 17."
+"sqlite isn't a toy. we moved from postgres: p99 dropped 40ms → 3ms. the whole db is one 2.1gb file."
+"race condition: two workers read count=5, both write count=6. fix: SELECT ... FOR UPDATE. been there since sql92."`;
+
+const TECHNICAL_THREAD_EXAMPLES = `What good technical thread hooks look like (tweet 1 only):
+"benchmarked 4 approaches. the obvious one was 10x slower. here's why:"
+"the error message is lying: [exact error text]. here's what's actually happening:"
+"we had 3 engineers who all thought it was someone else's bug. here's the actual callstack:"
+Note: tweet 1 names the specific thing. Never start with "I've been building" or "here's what I learned".`;
+
 const OUTPUT_FORMAT = `Return strict JSON only, no markdown fences:
 {
   "candidates": [
@@ -283,13 +312,39 @@ const HTML_APP = `<!DOCTYPE html>
     .session-item.selected { background: rgba(205,255,0,0.05); border-left: 2px solid var(--green); padding-left: 14px; }
     .s-project { font-size: 13px; font-weight: 600; color: var(--white); }
     .s-meta { font-size: 11px; color: var(--muted); margin-top: 2px; font-family: 'JetBrains Mono', monospace; }
+    .s-excerpt { font-size: 11px; color: var(--muted); margin-top: 3px; font-style: italic; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+    /* source tabs */
+    .source-tabs { display: flex; align-items: stretch; border-bottom: 1px solid var(--border); background: var(--bg); flex-shrink: 0; }
+    .src-tab { flex: 1; padding: 7px 4px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: 10px; font-weight: 700; font-family: 'JetBrains Mono', monospace; cursor: pointer; letter-spacing: .06em; text-transform: uppercase; transition: all 0.15s; }
+    .src-tab.active { color: var(--white); border-bottom-color: var(--green); }
+    .src-tab:hover:not(.active) { color: var(--muted2); }
+    .src-refresh { padding: 7px 10px; background: transparent; border: none; border-bottom: 2px solid transparent; color: var(--muted); font-size: 12px; cursor: pointer; transition: color 0.15s; }
+    .src-refresh:hover { color: var(--green); }
+
+    /* model picker */
+    .model-row { display: flex; gap: 4px; }
+    .model-btn { flex: 1; padding: 6px 0; background: transparent; border: 1px solid var(--border2); color: var(--muted2); font-size: 11px; font-weight: 600; font-family: 'DM Sans', sans-serif; cursor: pointer; transition: all 0.15s; letter-spacing: .02em; }
+    .model-btn.active { background: var(--card2); border-color: #444; color: var(--white); }
+    .model-btn:hover:not(.active) { border-color: #333; color: var(--muted); }
+    .model-cost { font-size: 10px; color: var(--muted); font-family: 'JetBrains Mono', monospace; text-align: center; margin-top: -4px; }
+
+    /* source badge */
+    .src-badge { display: inline-block; font-size: 9px; font-weight: 700; font-family: 'JetBrains Mono', monospace; padding: 1px 4px; border-radius: 2px; letter-spacing: .04em; vertical-align: middle; margin-right: 4px; }
+    .src-cc { background: rgba(205,255,0,0.12); color: #CDFF00; }
+    .src-oc { background: rgba(100,150,255,0.15); color: #7fa8ff; }
+    .src-cx { background: rgba(255,150,80,0.15); color: #ff9c55; }
 
     /* main */
     .main { flex: 1; overflow-y: auto; padding: 28px; }
-    .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 14px; }
-    .empty-logo { font-family: 'Bebas Neue', sans-serif; font-size: 72px; line-height: 1; color: var(--border2); letter-spacing: 2px; }
-    .empty-steps { font-size: 13px; color: var(--muted); line-height: 2.2; text-align: left; }
-    .empty-steps span { color: var(--green); font-weight: 700; }
+    .empty-state { height: 100%; display: flex; align-items: center; justify-content: center; flex-direction: column; gap: 0; }
+    .empty-logo { font-family: 'Bebas Neue', sans-serif; font-size: 48px; line-height: 1; color: var(--border2); letter-spacing: 2px; margin-bottom: 32px; }
+    .empty-steps { display: flex; flex-direction: column; gap: 18px; }
+    .empty-step { display: flex; align-items: center; gap: 14px; }
+    .step-num { font-family: 'JetBrains Mono', monospace; font-size: 28px; font-weight: 700; color: var(--green); line-height: 1; min-width: 40px; }
+    .step-text { font-size: 15px; color: var(--white); font-weight: 500; }
+    @keyframes pulse-once { 0%,100% { text-shadow: none; } 40% { text-shadow: 0 0 12px rgba(205,255,0,0.7); } }
+    .pulse-once { animation: pulse-once 1.5s ease forwards; }
 
     /* preview */
     .preview-card { background: var(--card); border: 1px solid var(--border); padding: 18px; margin-bottom: 20px; }
@@ -351,6 +406,15 @@ const HTML_APP = `<!DOCTYPE html>
           <button class="mode-btn active" id="btn-story" onclick="setMode('story')">Story</button>
           <button class="mode-btn" id="btn-technical" onclick="setMode('technical')">Technical</button>
         </div>
+        <div>
+          <div class="ctx-label" style="margin-bottom:6px">Model</div>
+          <div class="model-row">
+            <button class="model-btn" id="btn-haiku" onclick="setModel('claude-haiku-4-5')">Haiku</button>
+            <button class="model-btn active" id="btn-sonnet" onclick="setModel('claude-sonnet-4-6')">Sonnet</button>
+            <button class="model-btn" id="btn-opus" onclick="setModel('claude-opus-4-7')">Opus</button>
+          </div>
+          <div class="model-cost" id="model-cost">~$0.003 / run</div>
+        </div>
         <div class="count-row">
           <span>Candidates</span>
           <input class="count-input" id="count" type="number" min="1" max="10" value="3">
@@ -361,9 +425,9 @@ const HTML_APP = `<!DOCTYPE html>
         </div>
         <button class="gen-btn" id="gen-btn" onclick="generate()" disabled>Generate →</button>
       </div>
-      <div class="session-list-header">
-        <span class="sessions-label">Sessions</span>
-        <button class="refresh-btn" onclick="init()">↻ refresh</button>
+      <div class="source-tabs" id="source-tabs">
+        <button class="src-tab active" id="src-all" data-src="all" onclick="setSource(this.dataset.src)">All</button>
+        <button class="src-refresh" onclick="init()" title="Refresh">↻</button>
       </div>
       <div class="session-list" id="session-list">
         <div class="s-meta" style="padding:14px">Loading…</div>
@@ -373,20 +437,29 @@ const HTML_APP = `<!DOCTYPE html>
       <div class="empty-state">
         <div class="empty-logo">POSTMAXX</div>
         <div class="empty-steps">
-          <span>01</span> Pick a session from the left<br>
-          <span>02</span> Add context about yourself<br>
-          <span>03</span> Hit Generate
+          <div class="empty-step"><span class="step-num" id="step-num-1">01</span><span class="step-text">Pick a session from the left</span></div>
+          <div class="empty-step"><span class="step-num">02</span><span class="step-text">Add context about yourself</span></div>
+          <div class="empty-step"><span class="step-num">03</span><span class="step-text">Hit Generate</span></div>
         </div>
       </div>
     </main>
   </div>
   <script>
     var selected = null, mode = 'story', lastExtraction = null;
+    var sourceFilter = 'all';
+    var selectedModel = 'claude-sonnet-4-6';
+    var modelCosts = { 'claude-haiku-4-5': '~$0.001 / run', 'claude-sonnet-4-6': '~$0.003 / run', 'claude-opus-4-7': '~$0.015 / run' };
 
     // persist context across refreshes
     var ctxEl = document.getElementById('context');
     ctxEl.value = localStorage.getItem('pmx_context') || '';
     ctxEl.addEventListener('input', function(){ localStorage.setItem('pmx_context', ctxEl.value); });
+
+    // pulse step 1 on first ever load
+    if (!localStorage.getItem('pmx_onboarded')) {
+      var sn = document.getElementById('step-num-1');
+      if (sn) sn.classList.add('pulse-once');
+    }
 
     function esc(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
     function charHtml(text) {
@@ -425,7 +498,9 @@ const HTML_APP = `<!DOCTYPE html>
       el.style.opacity = '0.4';
       var ctx = document.getElementById('context').value.trim();
       try {
-        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:1,context:ctx})});
+        var body = { sessionFile: selected.file, mode: mode, count: 1, context: ctx, source: selected.source||'claude-code', model: selectedModel };
+        if (selected.sessionId) body.sessionId = selected.sessionId;
+        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         var data = await res.json();
         if (data.error || !data.candidates || !data.candidates.length) { el.style.opacity='1'; return; }
         var newHtml = buildCandidateHtml(data.candidates[0], i);
@@ -439,17 +514,63 @@ const HTML_APP = `<!DOCTYPE html>
       document.getElementById('btn-technical').classList.toggle('active', m==='technical');
     }
 
+    function setModel(m) {
+      selectedModel = m;
+      ['haiku','sonnet','opus'].forEach(function(n){ document.getElementById('btn-'+n).classList.remove('active'); });
+      var btnId = m === 'claude-haiku-4-5' ? 'btn-haiku' : m === 'claude-opus-4-7' ? 'btn-opus' : 'btn-sonnet';
+      document.getElementById(btnId).classList.add('active');
+      document.getElementById('model-cost').textContent = modelCosts[m] || '';
+    }
+
+    function setSource(src) {
+      sourceFilter = src;
+      document.querySelectorAll('.src-tab').forEach(function(el){ el.classList.remove('active'); });
+      var activeTab = document.getElementById('src-'+src);
+      if (activeTab) activeTab.classList.add('active');
+      renderSessionList();
+    }
+
+    function renderSessionList() {
+      var sessions = window.__sessions || [];
+      var filtered = sourceFilter === 'all' ? sessions : sessions.filter(function(s){ return s.source === sourceFilter; });
+      var list = document.getElementById('session-list');
+      if (!filtered.length) { list.innerHTML='<div class="s-meta" style="padding:14px">No sessions found.</div>'; return; }
+      var html='', lastDay='';
+      filtered.forEach(function(s, fi){
+        var i = sessions.indexOf(s);
+        var day=s.mtime.slice(0,10);
+        if (day!==lastDay) {
+          html+='<div class="day-header">'+esc(formatDay(day))+'</div>';
+          lastDay=day;
+        }
+        var srcBadge = s.source==='opencode' ? '<span class="src-badge src-oc">OC</span>' : s.source==='codex' ? '<span class="src-badge src-cx">CX</span>' : '<span class="src-badge src-cc">CC</span>';
+        var excerptHtml = s.excerpt ? '<div class="s-excerpt">'+esc(s.excerpt)+'</div>' : '';
+        html+='<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+srcBadge+esc(s.age)+' · '+s.sizeKb+'kb</div>'+excerptHtml+'</div>';
+      });
+      list.innerHTML=html;
+    }
+
+    function formatDay(iso){
+      var d=new Date(iso+'T12:00:00Z'), now=new Date();
+      var td=now.toISOString().slice(0,10), yd=new Date(now-864e5).toISOString().slice(0,10);
+      if (iso===td) return 'Today';
+      if (iso===yd) return 'Yesterday';
+      return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    }
+
     async function pick(i) {
       document.querySelectorAll('.session-item').forEach(function(el){el.classList.remove('selected');});
-      document.getElementById('si'+i).classList.add('selected');
+      var el = document.getElementById('si'+i); if (el) el.classList.add('selected');
       selected = window.__sessions[i];
       document.getElementById('session-info').textContent = selected.project+' · '+selected.age;
       document.getElementById('gen-btn').disabled = false;
-      // show session preview
+      localStorage.setItem('pmx_onboarded', '1');
       var main = document.getElementById('main');
       main.innerHTML = '<div class="loading"><div class="spinner"></div><span>Loading preview…</span></div>';
       try {
-        var res = await fetch('/api/preview?file='+encodeURIComponent(selected.file));
+        var params = 'file='+encodeURIComponent(selected.file)+'&source='+encodeURIComponent(selected.source||'claude-code');
+        if (selected.sessionId) params += '&sessionId='+encodeURIComponent(selected.sessionId);
+        var res = await fetch('/api/preview?'+params);
         var data = await res.json();
         if (data.preview) {
           main.innerHTML = '<div class="preview-card"><div class="preview-title">Session preview</div><div class="preview-text">'+esc(data.preview)+'</div></div>'+
@@ -470,24 +591,19 @@ const HTML_APP = `<!DOCTYPE html>
           return b.sizeKb-a.sizeKb;
         });
         window.__sessions = sessions;
-        var html='', lastDay='';
-        sessions.forEach(function(s,i){
-          var day=s.mtime.slice(0,10);
-          if (day!==lastDay) {
-            var label=formatDay(day);
-            html+='<div class="day-header">'+esc(label)+'</div>';
-            lastDay=day;
-          }
-          html+='<div class="session-item" id="si'+i+'" onclick="pick('+i+')">'+'<div class="s-project">'+esc(s.project)+'</div>'+'<div class="s-meta">'+esc(s.age)+' · '+s.sizeKb+'kb</div>'+'</div>';
+
+        // build source tabs dynamically
+        var sources = Array.from(new Set(sessions.map(function(s){ return s.source||'claude-code'; })));
+        var tabsEl = document.getElementById('source-tabs');
+        var tabsHtml = '<button class="src-tab'+(sourceFilter==='all'?' active':'')+'" id="src-all" data-src="all" onclick="setSource(this.dataset.src)">All</button>';
+        sources.forEach(function(src){
+          var label = src==='claude-code'?'CC':src==='opencode'?'OC':'CX';
+          tabsHtml += '<button class="src-tab'+(sourceFilter===src?' active':'')+'" id="src-'+src+'" data-src="'+src+'" onclick="setSource(this.dataset.src)">'+label+'</button>';
         });
-        list.innerHTML=html;
-        function formatDay(iso){
-          var d=new Date(iso+'T12:00:00Z'), now=new Date();
-          var td=now.toISOString().slice(0,10), yd=new Date(now-864e5).toISOString().slice(0,10);
-          if (iso===td) return 'Today';
-          if (iso===yd) return 'Yesterday';
-          return d.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-        }
+        tabsHtml += '<button class="src-refresh" onclick="init()" title="Refresh">↻</button>';
+        tabsEl.innerHTML = tabsHtml;
+
+        renderSessionList();
       } catch(e) { document.getElementById('session-list').innerHTML='<div class="s-meta" style="padding:14px;color:#e57373">Failed to load sessions</div>'; }
     }
 
@@ -499,7 +615,9 @@ const HTML_APP = `<!DOCTYPE html>
       main.innerHTML = '<div class="loading"><div class="spinner"></div><span>Extracting reasoning…</span></div>';
       document.getElementById('gen-btn').disabled = true;
       try {
-        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({sessionFile:selected.file,mode:mode,count:count,context:ctx})});
+        var body = { sessionFile: selected.file, mode: mode, count: count, context: ctx, source: selected.source||'claude-code', model: selectedModel };
+        if (selected.sessionId) body.sessionId = selected.sessionId;
+        var res = await fetch('/api/generate',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)});
         var data = await res.json();
         if (data.error) { main.innerHTML='<div class="error-box">Error: '+esc(data.error)+'</div>'; }
         else if (data.nothing||data.gateError) { main.innerHTML='<div class="msg-box">'+esc(data.message||data.gateError||'Nothing to share.')+'</div>'; }
@@ -551,13 +669,16 @@ const HTML_APP = `<!DOCTYPE html>
 </html>`;
 
 async function handleGetSessions(req, res) {
-  const sessions = findSessions({ days: 90 });
+  const sessions = findAllSessions({ days: 90 });
   const data = sessions.map(s => ({
-    project: s.project,
-    file:    s.file,
-    mtime:   s.mtime.toISOString(),
-    sizeKb:  Math.round(s.size / 1024),
-    age:     formatAge(s.mtime),
+    project:   s.project,
+    file:      s.file,
+    mtime:     s.mtime.toISOString(),
+    sizeKb:    Math.round(s.size / 1024),
+    age:       formatAge(s.mtime),
+    source:    s.source || 'claude-code',
+    sessionId: s.sessionId || null,
+    excerpt:   getSessionExcerpt(s),
   }));
   res.writeHead(200, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify(data));
@@ -574,7 +695,7 @@ async function handlePostGenerate(req, res) {
     return;
   }
 
-  const { sessionFile, mode, count, context } = params;
+  const { sessionFile, mode, count, context, source, sessionId, model } = params;
   if (!sessionFile) {
     res.writeHead(400, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify({ error: 'sessionFile is required' }));
@@ -583,8 +704,11 @@ async function handlePostGenerate(req, res) {
 
   try {
     const result = await runPipeline(sessionFile, mode || 'story', count || 3, {
-      apiKey: ANTHROPIC_KEY,
-      context: context || '',
+      apiKey:    ANTHROPIC_KEY,
+      context:   context || '',
+      source:    source || 'claude-code',
+      sessionId: sessionId || null,
+      model:     model || null,
     });
     res.writeHead(200, { 'Content-Type': 'application/json' });
     res.end(JSON.stringify(result));
@@ -614,14 +738,20 @@ async function handleRequest(req, res) {
   }
 
   if (req.method === 'GET' && urlPath === '/api/preview') {
-    const file = new URL('http://x' + req.url).searchParams.get('file');
-    if (!file || !fs.existsSync(file)) {
+    const sp = new URL('http://x' + req.url).searchParams;
+    const file      = sp.get('file');
+    const source    = sp.get('source') || 'claude-code';
+    const sessionId = sp.get('sessionId');
+
+    if (source === 'claude-code' && (!file || !fs.existsSync(file))) {
       res.writeHead(404, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ error: 'not found' }));
       return;
     }
     try {
-      const messages = parseSession(file);
+      const session = { file, source, sessionId };
+      const messages = parseSessionBySource(session);
+      if (!messages) throw new Error('Could not read session');
       const userMsgs = messages.filter(m => m.role === 'user').slice(0, 3).map(m => m.content.slice(0, 300));
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({ preview: userMsgs.join('\n\n') }));
@@ -693,8 +823,8 @@ async function serveUi(opts = {}) {
   });
 
   const actualPort = server.address().port;
-  console.log(`\n  devlog UI  →  http://localhost:${actualPort}\n`);
-  if (!skipOpen) exec(`open http://localhost:${actualPort}`);
+  console.log(`\n  postmaxx_ UI  →  http://127.0.0.1:${actualPort}\n`);
+  if (!skipOpen) exec(`open http://127.0.0.1:${actualPort}`);
 
   return server;
 }
@@ -753,11 +883,11 @@ ${formatExtraction(extraction)}
 Recent posts (avoid repeating these angles):
 ${formatRecentPosts(state)}
 ${voiceBlock}
-${VOICE_RULES}
+${TECHNICAL_VOICE_RULES}
 
-${SINGLE_EXAMPLES}
+${TECHNICAL_SINGLE_EXAMPLES}
 
-${THREAD_EXAMPLES}
+${TECHNICAL_THREAD_EXAMPLES}
 
 Generate ${count} candidates with genuinely different angles. Use real names: library names, model names, error messages, patterns. The trade-off accepted is more interesting than the solution chosen. Each picks its own shape:
 - "single" for one sharp technical observation (≤ 280 chars)
@@ -771,6 +901,7 @@ ${OUTPUT_FORMAT}`;
 async function generateStage2(extraction, state, opts) {
   const fetchFn      = opts.fetchFn || globalThis.fetch;
   const { mode, count, voiceExamples, apiKey } = opts;
+  const stage2Model  = opts.model || SONNET_MODEL;
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
 
   const prompt = mode === 'technical'
@@ -785,7 +916,7 @@ async function generateStage2(extraction, state, opts) {
       'anthropic-version': '2023-06-01',
     },
     body: JSON.stringify({
-      model: SONNET_MODEL,
+      model: stage2Model,
       max_tokens: 2500,
       messages: [{ role: 'user', content: prompt }],
     }),
@@ -810,8 +941,8 @@ async function generateStage2(extraction, state, opts) {
 
 // ─── Session discovery ─────────────────────────────────────────────────────
 
-function findSessions(opts = {}) {
-  if (!fs.existsSync(CLAUDE_DIR)) die(`Claude projects dir not found: ${CLAUDE_DIR}`);
+function findClaudeCodeSessions(opts = {}) {
+  if (!fs.existsSync(CLAUDE_DIR)) return [];
 
   const days   = (opts.days !== undefined) ? opts.days : DAYS_FILTER;
   const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
@@ -831,11 +962,80 @@ function findSessions(opts = {}) {
       const filePath = path.join(dirPath, file);
       const stat     = fs.statSync(filePath);
       if (stat.mtime.getTime() < cutoff) continue;
-      sessions.push({ project: projectName, file: filePath, mtime: stat.mtime, size: stat.size });
+      sessions.push({ project: projectName, file: filePath, mtime: stat.mtime, size: stat.size, source: 'claude-code' });
     }
   }
 
-  return sessions.sort((a, b) => b.mtime - a.mtime);
+  return sessions;
+}
+
+function findOpencodeSessions(opts = {}) {
+  try {
+    const raw = execSync('opencode session list --json 2>/dev/null', { encoding: 'utf8', timeout: 5000 }).trim();
+    if (!raw) return [];
+    const list = JSON.parse(raw);
+    if (!Array.isArray(list)) return [];
+
+    const days   = (opts.days !== undefined) ? opts.days : DAYS_FILTER;
+    const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+    const sessions = [];
+
+    for (const s of list) {
+      const mtime = new Date(s.time || s.createdAt || s.updated_at || 0);
+      if (mtime.getTime() < cutoff) continue;
+      sessions.push({
+        project:   s.projectPath ? path.basename(s.projectPath) : (s.title || s.id || 'opencode'),
+        file:      s.id,
+        mtime,
+        size:      0,
+        source:    'opencode',
+        sessionId: s.id,
+      });
+    }
+    return sessions;
+  } catch { return []; }
+}
+
+function findCodexSessions(opts = {}) {
+  const codexDir = path.join(os.homedir(), '.codex', 'sessions');
+  if (!fs.existsSync(codexDir)) return [];
+
+  const days   = (opts.days !== undefined) ? opts.days : DAYS_FILTER;
+  const cutoff = Date.now() - days * 24 * 60 * 60 * 1000;
+  const sessions = [];
+
+  function scanDir(dir) {
+    let entries;
+    try { entries = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
+    for (const entry of entries) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) { scanDir(full); continue; }
+      if (!entry.name.endsWith('.jsonl')) continue;
+      const stat = fs.statSync(full);
+      if (stat.mtime.getTime() < cutoff) continue;
+      sessions.push({ project: 'codex', file: full, mtime: stat.mtime, size: stat.size, source: 'codex' });
+    }
+  }
+  scanDir(codexDir);
+  return sessions;
+}
+
+function findSessions(opts = {}) {
+  const cc = findClaudeCodeSessions(opts);
+  if (cc.length === 0 && !opts.multiSource) {
+    // legacy: die with helpful message only in CLI mode
+    if (!fs.existsSync(CLAUDE_DIR)) die(`Claude projects dir not found: ${CLAUDE_DIR}`);
+  }
+  return cc.sort((a, b) => b.mtime - a.mtime);
+}
+
+function findAllSessions(opts = {}) {
+  const all = [
+    ...findClaudeCodeSessions(opts),
+    ...findOpencodeSessions(opts),
+    ...findCodexSessions(opts),
+  ];
+  return all.sort((a, b) => b.mtime - a.mtime);
 }
 
 function projectSlug(dir) {
@@ -875,8 +1075,71 @@ function parseSession(filePath) {
 
 function extractContent(content) {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  if (Array.isArray(content)) return content
+    .filter(b => b.text && (b.type === 'text' || b.type === 'input_text' || b.type === 'output_text'))
+    .map(b => b.text).join('\n').trim();
   return '';
+}
+
+function parseOpencodeSession(sessionId) {
+  try {
+    const raw = execSync(`opencode session export ${sessionId} --format json 2>/dev/null`, { encoding: 'utf8', timeout: 10000 });
+    const data = JSON.parse(raw.trim());
+    const parts = data.parts || data.messages || [];
+    const messages = [];
+    for (const p of parts) {
+      const role = p.role || (p.type === 'user' ? 'user' : p.type === 'assistant' ? 'assistant' : null);
+      if (!role || (role !== 'user' && role !== 'assistant')) continue;
+      const content = typeof p.content === 'string' ? p.content : extractContent(p.content);
+      if (content && content.length > 20) messages.push({ role, content });
+    }
+    return messages;
+  } catch { return null; }
+}
+
+function parseCodexSession(filePath) {
+  const lines = fs.readFileSync(filePath, 'utf8').trim().split('\n').filter(Boolean);
+  const messages = [];
+  for (const line of lines) {
+    try {
+      const entry = JSON.parse(line);
+      const payload = entry.payload || entry;
+      const role = payload.role;
+      if (role !== 'user' && role !== 'assistant') continue;
+      const content = typeof payload.content === 'string'
+        ? payload.content
+        : extractContent(payload.content);
+      if (content && content.length > 20) messages.push({ role, content });
+    } catch { }
+  }
+  return messages;
+}
+
+function parseSessionBySource(session) {
+  if (session.source === 'opencode') return parseOpencodeSession(session.sessionId || session.file);
+  if (session.source === 'codex')    return parseCodexSession(session.file);
+  return parseSession(session.file);
+}
+
+function getSessionExcerpt(session) {
+  try {
+    if (session.source === 'opencode') return '';
+    const fd  = fs.openSync(session.file, 'r');
+    const buf = Buffer.alloc(4096);
+    const n   = fs.readSync(fd, buf, 0, 4096, 0);
+    fs.closeSync(fd);
+    const chunk = buf.slice(0, n).toString('utf8');
+    for (const line of chunk.split('\n')) {
+      try {
+        const entry = JSON.parse(line);
+        const role = entry.type || entry.role;
+        if (role !== 'user') continue;
+        const content = extractContent((entry.message || entry).content || entry.content);
+        if (content && content.length > 20) return content.slice(0, 80);
+      } catch { }
+    }
+    return '';
+  } catch { return ''; }
 }
 
 // ─── Smart chunking ────────────────────────────────────────────────────────
@@ -955,7 +1218,7 @@ async function pushToTypefully(content) {
 
 function printResults(result, projectName) {
   console.log(`\n${'─'.repeat(60)}`);
-  console.log(`  devlog  ·  ${projectName}  ·  mode:${MODE}`);
+  console.log(`  postmaxx_  ·  ${projectName}  ·  mode:${MODE}`);
   console.log(`${'─'.repeat(60)}\n`);
 
   if (!result.candidates || result.candidates.length === 0) {
@@ -1001,7 +1264,7 @@ async function pickSession(sessions) {
 
 // ─── State management ─────────────────────────────────────────────────────
 
-const DEFAULT_STATE_DIR = path.join(os.homedir(), '.devlog', 'state');
+const DEFAULT_STATE_DIR = path.join(os.homedir(), '.postmaxxing', 'state');
 
 function emptyState() {
   return { active_arcs: [], recent_posts: [], last_session_summary: null };
@@ -1183,33 +1446,47 @@ function readBody(req) {
 }
 
 async function runPipeline(sessionFile, mode, count, opts = {}) {
-  if (!fs.existsSync(sessionFile)) return { gateError: 'Session file not found.' };
+  const source    = opts.source || 'claude-code';
+  const sessionId = opts.sessionId || null;
+
+  if (source === 'claude-code' && !fs.existsSync(sessionFile)) return { gateError: 'Session file not found.' };
 
   const apiKey = opts.apiKey || ANTHROPIC_KEY;
   if (!apiKey) throw new Error('Missing ANTHROPIC_API_KEY');
 
-  const rawText = fs.readFileSync(sessionFile, 'utf8');
-  const gate    = passesPreGate(rawText);
-  if (!gate.ok) return { gateError: gate.reason };
+  const session  = { file: sessionFile, source, sessionId };
+  const messages = parseSessionBySource(session);
+  if (!messages) return { gateError: 'Could not read session transcript.' };
 
-  const messages         = parseSession(sessionFile);
+  // pre-gate for Claude Code files (raw byte/line check); skip for other sources
+  if (source === 'claude-code') {
+    const rawText = fs.readFileSync(sessionFile, 'utf8');
+    const gate    = passesPreGate(rawText);
+    if (!gate.ok) return { gateError: gate.reason };
+  } else {
+    if (messages.length < 4) return { gateError: 'Session too short to generate a post.' };
+  }
+
   const chunk            = chunkSession(messages);
-  const slug             = projectSlug(path.basename(path.dirname(sessionFile)));
+  const slug             = source === 'claude-code'
+    ? projectSlug(path.basename(path.dirname(sessionFile)))
+    : (sessionId || sessionFile).replace(/[^a-z0-9]/gi, '-').slice(0, 40);
   const state            = loadState(slug, opts);
   const voiceExamples    = STYLE_FILE ? loadStyle(STYLE_FILE) : null;
-  const contextHint = opts.context || CONTEXT || '';
+  const contextHint      = opts.context || CONTEXT || '';
   const sessionForPrompt = contextHint ? `Context about the author: ${contextHint}\n\n---\n\n${chunk}` : chunk;
 
   const extraction = await extractStage1(sessionForPrompt, state, { apiKey, fetchFn: opts.fetchFn });
 
-  if (extraction.best_output_type === 'nothing') extraction.best_output_type = 'drip';
+  if (extraction.best_output_type === 'nothing') return { nothing: true, message: 'Nothing worth sharing in this session.' };
 
   const result = await generateStage2(extraction, state, {
-    mode: mode || 'story',
+    mode:  mode || 'story',
     count: count || 3,
     voiceExamples,
     apiKey,
-    fetchFn: opts.fetchFn,
+    model:    opts.model || null,
+    fetchFn:  opts.fetchFn,
   });
   result.extraction = extraction;
   return result;

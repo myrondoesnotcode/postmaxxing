@@ -2,7 +2,7 @@ const test   = require('node:test');
 const assert = require('node:assert');
 const path   = require('path');
 const http   = require('http');
-const { runPipeline, serveUi } = require('../devlog.js');
+const { runPipeline, serveUi } = require('../postmaxx.js');
 
 async function get(port, urlPath) {
   return new Promise((resolve, reject) => {
@@ -98,7 +98,7 @@ test('GET / returns 200 with HTML content-type', async () => {
     const res  = await get(port, '/');
     assert.strictEqual(res.status, 200);
     assert.ok(res.headers['content-type'].includes('text/html'));
-    assert.ok(res.body.includes('devlog'));
+    assert.ok(res.body.includes('postmaxx'));
   } finally {
     await new Promise(r => server.close(r));
   }

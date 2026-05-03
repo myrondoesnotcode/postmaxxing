@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildExtractionPrompt, extractStage1 } = require('../devlog.js');
+const { buildExtractionPrompt, extractStage1 } = require('../postmaxx.js');
 
 const emptyState = { active_arcs: [], recent_posts: [], last_session_summary: null };
 
