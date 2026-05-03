@@ -12,15 +12,21 @@ const CONFIG_DIR  = path.join(os.homedir(), '.postmaxxing');
 const CONFIG_FILE = path.join(CONFIG_DIR, 'config');
 
 function loadEnv() {
-  // load from ~/.postmaxxing/config first (npx-friendly), then local .env
-  for (const envPath of [CONFIG_FILE, path.join(__dirname, '.env')]) {
-    if (!fs.existsSync(envPath)) continue;
-    fs.readFileSync(envPath, 'utf8')
-      .split('\n')
-      .forEach(line => {
-        const [k, ...v] = line.split('=');
-        if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
-      });
+  // build candidate paths: ~/.postmaxxing/config, then walk up from __dirname looking for .env
+  const candidates = [CONFIG_FILE];
+  let dir = __dirname;
+  for (let i = 0; i < 8; i++) {
+    candidates.push(path.join(dir, '.env'));
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  const parseEnv = (text) => text.split('\n').forEach(line => {
+    const [k, ...v] = line.split('=');
+    if (k && v.length) process.env[k.trim()] = v.join('=').trim().replace(/^['"]|['"]$/g, '');
+  });
+  for (const envPath of candidates) {
+    if (fs.existsSync(envPath)) parseEnv(fs.readFileSync(envPath, 'utf8'));
   }
 }
 loadEnv();
@@ -1069,7 +1075,9 @@ function parseSession(filePath) {
 
 function extractContent(content) {
   if (typeof content === 'string') return content;
-  if (Array.isArray(content)) return content.filter(b => b.type === 'text').map(b => b.text).join('\n').trim();
+  if (Array.isArray(content)) return content
+    .filter(b => b.text && (b.type === 'text' || b.type === 'input_text' || b.type === 'output_text'))
+    .map(b => b.text).join('\n').trim();
   return '';
 }
 
