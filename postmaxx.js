@@ -1106,9 +1106,10 @@ function parseCodexSession(filePath) {
       const payload = entry.payload || entry;
       const role = payload.role;
       if (role !== 'user' && role !== 'assistant') continue;
-      const content = typeof payload.content === 'string'
+      const raw = typeof payload.content === 'string'
         ? payload.content
         : extractContent(payload.content);
+      const content = raw.replace(/<environment_context>[\s\S]*?<\/environment_context>\s*/g, '').trim();
       if (content && content.length > 20) messages.push({ role, content });
     } catch { }
   }
@@ -1136,7 +1137,7 @@ function getSessionExcerpt(session) {
         const role = payload.role || entry.type;
         if (role !== 'user') continue;
         const raw = extractContent((payload.message || payload).content || payload.content);
-        const content = raw.replace(/<[a-z_]+>[\s\S]*?<\/[a-z_]+>/g, '').trim();
+        const content = raw.replace(/<environment_context>[\s\S]*?<\/environment_context>\s*/g, '').trim();
         if (content && content.length > 20) return content.slice(0, 80);
       } catch { }
     }
