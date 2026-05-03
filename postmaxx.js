@@ -1132,9 +1132,11 @@ function getSessionExcerpt(session) {
     for (const line of chunk.split('\n')) {
       try {
         const entry = JSON.parse(line);
-        const role = entry.type || entry.role;
+        const payload = entry.payload || entry;
+        const role = payload.role || entry.type;
         if (role !== 'user') continue;
-        const content = extractContent((entry.message || entry).content || entry.content);
+        const raw = extractContent((payload.message || payload).content || payload.content);
+        const content = raw.replace(/<[a-z_]+>[\s\S]*?<\/[a-z_]+>/g, '').trim();
         if (content && content.length > 20) return content.slice(0, 80);
       } catch { }
     }
