@@ -817,8 +817,8 @@ async function serveUi(opts = {}) {
   });
 
   const actualPort = server.address().port;
-  console.log(`\n  postmaxx_ UI  →  http://localhost:${actualPort}\n`);
-  if (!skipOpen) exec(`open http://localhost:${actualPort}`);
+  console.log(`\n  postmaxx_ UI  →  http://127.0.0.1:${actualPort}\n`);
+  if (!skipOpen) exec(`open http://127.0.0.1:${actualPort}`);
 
   return server;
 }
