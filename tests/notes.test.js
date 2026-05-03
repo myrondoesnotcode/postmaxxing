@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildNoteContent } = require('../devlog.js');
+const { buildNoteContent } = require('../postmaxx.js');
 
 const sampleResult = {
   candidates: [
@@ -67,7 +67,7 @@ test('buildNoteContent handles empty candidates gracefully', () => {
   assert.match(content, /myproj/i);
 });
 
-const { exportToNotes } = require('../devlog.js');
+const { exportToNotes } = require('../postmaxx.js');
 
 test('exportToNotes calls execFn with osascript command containing title and body', () => {
   let capturedCmd = null;

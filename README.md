@@ -28,7 +28,7 @@ echo 'ANTHROPIC_API_KEY=sk-ant-...' > .env
 
 **3. Open the UI**
 ```bash
-node devlog.js --ui
+node postmaxx.js --ui
 ```
 
 Opens at [http://localhost:3000](http://localhost:3000). Pick a session, generate candidates, edit and post.
@@ -38,12 +38,12 @@ Opens at [http://localhost:3000](http://localhost:3000). Pick a session, generat
 If you prefer the terminal over the UI:
 
 ```bash
-node devlog.js                    # most recent session, prints to terminal
-node devlog.js --list             # pick a session interactively
-node devlog.js --mode technical   # engineering lens instead of story
-node devlog.js --count 3          # generate 3 candidates
-node devlog.js --days 7           # look back 7 days
-node devlog.js --project myapp    # filter by project name
+node postmaxx.js                    # most recent session, prints to terminal
+node postmaxx.js --list             # pick a session interactively
+node postmaxx.js --mode technical   # engineering lens instead of story
+node postmaxx.js --count 3          # generate 3 candidates
+node postmaxx.js --days 7           # look back 7 days
+node postmaxx.js --project myapp    # filter by project name
 ```
 
 ## Posting threads

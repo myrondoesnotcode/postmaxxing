@@ -3,7 +3,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { projectSlug, loadState, saveState, recordApprovals } = require('../devlog.js');
+const { projectSlug, loadState, saveState, recordApprovals } = require('../postmaxx.js');
 
 test('projectSlug extracts last segment from encoded path', () => {
   assert.strictEqual(projectSlug('-Users-myrons-Claude-Projects-clipmatic'), 'clipmatic');
@@ -26,7 +26,7 @@ test('projectSlug returns last token for hyphenated project name (known limitati
 });
 
 test('loadState returns empty default when file does not exist', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   const state = loadState('nonexistent-project', { stateDir: tmp });
   assert.deepStrictEqual(state, {
     active_arcs: [],
@@ -36,7 +36,7 @@ test('loadState returns empty default when file does not exist', () => {
 });
 
 test('saveState then loadState round-trips state', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   const slug = 'myproj';
   const written = {
     active_arcs: ['feature x'],
@@ -49,7 +49,7 @@ test('saveState then loadState round-trips state', () => {
 });
 
 test('loadState recovers from corrupt file by returning empty default', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   fs.writeFileSync(path.join(tmp, 'corrupt.json'), '{not json');
   const state = loadState('corrupt', { stateDir: tmp });
   assert.deepStrictEqual(state, {
@@ -60,7 +60,7 @@ test('loadState recovers from corrupt file by returning empty default', () => {
 });
 
 test('recordApprovals appends entries to recent_posts', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   const slug = 'p1';
   recordApprovals(slug, [
     { summary: 'pricing decision', type: 'story', arc: null },
@@ -72,7 +72,7 @@ test('recordApprovals appends entries to recent_posts', () => {
 });
 
 test('recordApprovals merges new arcs without duplicates', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   const slug = 'p2';
   saveState(slug, {
     active_arcs: ['existing arc'],
@@ -90,7 +90,7 @@ test('recordApprovals merges new arcs without duplicates', () => {
 });
 
 test('recordApprovals trims recent_posts to last 20', () => {
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'devlog-state-'));
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'postmaxx-state-'));
   const slug = 'p3';
   const existing = {
     active_arcs: [],

@@ -1,6 +1,6 @@
 const test = require('node:test');
 const assert = require('node:assert');
-const { buildStoryPrompt, buildTechnicalPrompt, generateStage2 } = require('../devlog.js');
+const { buildStoryPrompt, buildTechnicalPrompt, generateStage2 } = require('../postmaxx.js');
 
 const sampleExtraction = {
   has_reasoning: true,

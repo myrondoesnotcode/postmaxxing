@@ -1,4 +1,4 @@
-# Devlog
+# postmaxx_
 
 CLI tool that reads Claude Code session transcripts and generates building-in-public posts for X/Twitter. Surfaces the **reasoning** behind code decisions — not changelogs, not hype.
 
@@ -6,20 +6,20 @@ CLI tool that reads Claude Code session transcripts and generates building-in-pu
 
 ```bash
 # Requires .env with ANTHROPIC_API_KEY (and optionally TYPEFULLY_API_KEY)
-node devlog.js                              # most recent session, story mode
-node devlog.js --mode technical             # engineering reasoning lens
-node devlog.js --list                       # interactive session picker
-node devlog.js --project clipmatic          # filter by project name
-node devlog.js --days 7                     # look back N days
-node devlog.js --count 3                    # number of candidates to generate
-node devlog.js --context "text"             # one-line manual hint prepended to session
-node devlog.js --style ~/tweets.json        # match voice from X archive
-node devlog.js --push                       # send approved drafts to Typefully
+node postmaxx.js                              # most recent session, story mode
+node postmaxx.js --mode technical             # engineering reasoning lens
+node postmaxx.js --list                       # interactive session picker
+node postmaxx.js --project clipmatic          # filter by project name
+node postmaxx.js --days 7                     # look back N days
+node postmaxx.js --count 3                    # number of candidates to generate
+node postmaxx.js --context "text"             # one-line manual hint prepended to session
+node postmaxx.js --style ~/tweets.json        # match voice from X archive
+node postmaxx.js --push                       # send approved drafts to Typefully
 ```
 
 ## Architecture
 
-Single file (`devlog.js`), zero dependencies, vanilla Node.js (18+).
+Single file (`postmaxx.js`), zero dependencies, vanilla Node.js (18+).
 
 **Two-stage pipeline:** discover sessions → pre-gate → parse + chunk → Stage 1 (Haiku: extract reasoning) → Stage 2 (Sonnet: generate candidates) → display → optionally push to Typefully + record approvals to state.
 
@@ -33,7 +33,7 @@ Takes the Stage 1 JSON (not the raw session — this is the hallucination firewa
 The model picks one of: **story** (self-contained reasoning), **continuation** (references an active arc), **drip** (small update), or nothing (exits cleanly).
 
 ### Project state
-`~/.devlog/state/<project-slug>.json` — tracks active arcs and recent posts. Updated only when posts are approved for Typefully push (so rejected drafts don't pollute history).
+`~/.postmaxxing/state/<project-slug>.json` — tracks active arcs and recent posts. Updated only when posts are approved for Typefully push (so rejected drafts don't pollute history).
 
 ## Modes
 
@@ -45,9 +45,9 @@ The model picks one of: **story** (self-contained reasoning), **continuation** (
 ## Conventions
 
 - **Zero external dependencies.** Uses only Node.js built-ins + native fetch. No package.json. Keep it this way.
-- **Single-file tool.** All logic lives in `devlog.js`.
+- **Single-file tool.** All logic lives in `postmaxx.js`.
 - **Plain JavaScript.** No TypeScript, no transpilation.
-- **Runs directly** via `node devlog.js` or as executable (has shebang).
+- **Runs directly** via `node postmaxx.js` or as executable (has shebang).
 - **Functions are plain named functions**, not classes.
 - **Error handling is minimal by design** — `die()` for fatal, `warn()` for non-fatal.
 - **CLI args are parsed manually** with `getArg`/`hasFlag` helpers.
